@@ -1,0 +1,5 @@
+.git
+.env
+*.class
+backend/*.class
+.gemini

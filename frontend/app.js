@@ -5,8 +5,31 @@
  * Endpoint: POST http://localhost:8080/api/analyze
  */
 
-// API Configuration
-const API_BASE_URL = 'http://localhost:8080';
+// API Configuration: dynamically resolves custom URL -> localStorage override -> cloud origin -> local default
+function getApiBaseUrl() {
+  if (typeof window !== 'undefined' && window.SCAMLENS_API_URL) {
+    return window.SCAMLENS_API_URL.replace(/\/+$/, '');
+  }
+  try {
+    const stored = localStorage.getItem('scamlens_api_url');
+    if (stored && stored.trim()) {
+      return stored.trim().replace(/\/+$/, '');
+    }
+  } catch (_) {}
+
+  // If hosted on a deployed cloud host (not file:// and not localhost), use current origin
+  if (typeof window !== 'undefined' && window.location && window.location.origin) {
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+    if (protocol.startsWith('http') && host !== 'localhost' && host !== '127.0.0.1' && !host.endsWith('.local')) {
+      return window.location.origin;
+    }
+  }
+
+  return 'http://localhost:8080';
+}
+
+const API_BASE_URL = getApiBaseUrl();
 const ANALYZE_ENDPOINT = `${API_BASE_URL}/api/analyze`;
 
 // DOM Elements — Inputs & Controls

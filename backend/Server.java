@@ -37,11 +37,22 @@ public class Server {
         loadLocalEnv();
 
         int port = PORT;
+        String envPort = System.getenv("PORT");
+        if (envPort == null || envPort.isBlank()) {
+            envPort = envCache.get("PORT");
+        }
+        if (envPort != null && !envPort.isBlank()) {
+            try {
+                port = Integer.parseInt(envPort.trim());
+            } catch (NumberFormatException e) {
+                System.err.println("Invalid PORT env variable: " + envPort + ". Using default " + PORT);
+            }
+        }
         if (args.length > 0) {
             try {
-                port = Integer.parseInt(args[0]);
+                port = Integer.parseInt(args[0].trim());
             } catch (NumberFormatException e) {
-                System.err.println("Invalid port number: " + args[0] + ". Using default port " + PORT);
+                System.err.println("Invalid port number argument: " + args[0] + ". Using " + port);
             }
         }
 
@@ -56,13 +67,16 @@ public class Server {
 
             String apiKey = getGemmaApiKey();
             String model = getGemmaModel();
+            boolean aiDisabled = isAiDisabled();
 
             System.out.println("==================================================");
             System.out.println(" 🛡️  ScamLens Java Backend is running!");
             System.out.println(" Server Port  : http://localhost:" + port);
             System.out.println(" Health Check : http://localhost:" + port + "/api/health");
             System.out.println(" Analyze API  : http://localhost:" + port + "/api/analyze (POST)");
-            if (apiKey != null && !apiKey.isBlank()) {
+            if (aiDisabled) {
+                System.out.println(" AI Engine    : Disabled via DISABLE_AI flag (Using Rule Heuristics)");
+            } else if (apiKey != null && !apiKey.isBlank()) {
                 System.out.println(" AI Engine    : Enabled (Model: " + model + ")");
             } else {
                 System.out.println(" AI Engine    : Disabled (No GEMMA_API_KEY found, running Heuristic Rules)");
@@ -145,8 +159,8 @@ public class Server {
             String apiKey = getGemmaApiKey();
             String model = getGemmaModel();
 
-            // 1. Try Gemma AI if API key is present
-            if (apiKey != null && !apiKey.isBlank()) {
+            // 1. Try Gemma AI if API key is present and AI is not disabled
+            if (!isAiDisabled() && apiKey != null && !apiKey.isBlank()) {
                 try {
                     System.out.println("[ScamLens] Calling Gemma API (model: " + model + ")...");
                     result = callGemmaApi(message, apiKey, model);
@@ -158,6 +172,8 @@ public class Server {
                     System.err.println("[ScamLens] Gemma API request failed: " + cleanError);
                     System.out.println("[ScamLens] Automatically falling back to local heuristic rules...");
                 }
+            } else if (isAiDisabled()) {
+                System.out.println("[ScamLens] AI evaluation disabled via DISABLE_AI flag. Using Rule Heuristics.");
             }
 
             // 2. Fallback to rule-based analyzer if AI was skipped or failed
@@ -402,7 +418,13 @@ public class Server {
      * "no application or registration fee", "no fee", "never ask you to pay", "without any fee"
      */
     static boolean isNegatedPaymentClause(String s) {
-        if (s.matches(".*\\bno\\s+([a-z]+\\s+){0,4}(fee|fees|deposit|deposits|charge|charges|cost|costs|payment|payments)\\b.*")) return true;
+        // Fee waiver and exemption patterns (e.g. "fee is waived", "fee waiver", "100% waiver")
+        if (s.matches(".*\\b(fee|fees|deposit|charge|charges)\\s+([a-z0-9%]+\\s+){0,3}(waived|exempt|exempted|canceled|zero|not\\s+applicable)\\b.*")) return true;
+        if (s.matches(".*\\b(waived|waives|exempts|cancel)\\s+([a-z0-9%]+\\s+){0,3}(fee|fees|deposit|charge|charges)\\b.*")) return true;
+        if (s.contains("fee waiver") || s.contains("fees waived") || s.contains("waiver of fee") || s.contains("waiver for")
+                || s.contains("100% waiver") || s.contains("waiver applied") || s.contains("waiving the fee") || s.contains("waive the fee")) return true;
+
+        if (s.matches(".*\\bno\\s+([a-z0-9%]+\\s+){0,4}(fee|fees|deposit|deposits|charge|charges|cost|costs|payment|payments)\\b.*")) return true;
         if (s.matches(".*\\b(never|not|won't|will not)\\s+([a-z]+\\s+){0,4}(ask|require|demand)\\b.*\\b(pay|fee|deposit|money)\\b.*")) return true;
         if (s.matches(".*\\b(not\\s+be\\s+asked\\s+to\\s+pay|do\\s+not\\s+pay|not\\s+require\\s+payment)\\b.*")) return true;
         if (s.contains("free of cost") || s.contains("free of charge") || s.contains("at no cost") || s.contains("without any fee") || s.contains("without paying")) return true;
@@ -582,9 +604,55 @@ public class Server {
     }
 
     private static void addCorsHeaders(HttpExchange exchange) {
-        exchange.getResponseHeaders().set("Access-Control-Allow-Origin", "*");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+        String origin = exchange.getRequestHeaders().getFirst("Origin");
+        String allowedOrigin = resolveCorsOrigin(origin);
+        if (allowedOrigin != null) {
+            exchange.getResponseHeaders().set("Access-Control-Allow-Origin", allowedOrigin);
+            exchange.getResponseHeaders().set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+            exchange.getResponseHeaders().set("Access-Control-Allow-Headers", "Content-Type, Authorization");
+            exchange.getResponseHeaders().set("Vary", "Origin");
+        }
+    }
+
+    private static String resolveCorsOrigin(String requestOrigin) {
+        String allowedOriginsEnv = System.getenv("ALLOWED_ORIGINS");
+        if (allowedOriginsEnv == null || allowedOriginsEnv.isBlank()) {
+            allowedOriginsEnv = envCache.get("ALLOWED_ORIGINS");
+        }
+
+        // If ALLOWED_ORIGINS is not set (development default), allow local origins or echo request origin
+        if (allowedOriginsEnv == null || allowedOriginsEnv.isBlank()) {
+            return (requestOrigin != null && !requestOrigin.isBlank()) ? requestOrigin : "*";
+        }
+
+        if (requestOrigin == null || requestOrigin.isBlank()) {
+            return null;
+        }
+
+        // Always allow local development origins (browser file:// and localhost)
+        if ("null".equals(requestOrigin) || requestOrigin.startsWith("http://localhost:")
+                || requestOrigin.startsWith("http://127.0.0.1:") || requestOrigin.startsWith("https://localhost:")) {
+            return requestOrigin;
+        }
+
+        // Check against comma-separated whitelist (e.g. https://scamlens.onrender.com,https://user.github.io)
+        for (String allowed : allowedOriginsEnv.split(",")) {
+            String trimmed = allowed.trim();
+            if (!trimmed.isEmpty() && (trimmed.equalsIgnoreCase(requestOrigin) || trimmed.equals("*"))) {
+                return requestOrigin;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isAiDisabled() {
+        String disable = System.getenv("DISABLE_AI");
+        if (disable == null || disable.isBlank()) {
+            disable = envCache.get("DISABLE_AI");
+        }
+        if (disable == null) return false;
+        String trimmed = disable.trim();
+        return "true".equalsIgnoreCase(trimmed) || "1".equals(trimmed);
     }
 
     private static String extractMessageFromJson(String json) {

@@ -26,6 +26,7 @@ public class ServerTest {
         testNoFeeWithUnrelatedSuspiciousSignal();
         testMixedFeeNegationWithActualUrgentDeposit();
         testBenignSchedulingDeadlines();
+        testFeeWaiverNotification();
 
         System.out.println("==================================================");
         System.out.println(" Results: " + testsPassed + " / " + testsTotal + " tests passed.");
@@ -35,7 +36,7 @@ public class ServerTest {
             System.err.println("❌ Some tests failed!");
             System.exit(1);
         } else {
-            System.out.println("✅ All 5 tests passed successfully!");
+            System.out.println("✅ All " + testsTotal + " tests passed successfully!");
         }
     }
 
@@ -225,9 +226,47 @@ public class ServerTest {
             System.err.println("   FAIL: Standard 3-day interview window was incorrectly flagged as scam urgency pressure.");
             passed = false;
         }
-
         if (passed) {
             System.out.println("   PASSED ✅ (Benign scheduling deadline was not misclassified as scam urgency)");
+            testsPassed++;
+        }
+    }
+
+    /**
+     * Test 6: Message mentioning a fee waiver and standard application deadline (should NOT trigger payment or urgency flags)
+     */
+    private static void testFeeWaiverNotification() {
+        testsTotal++;
+        String message = "Congratulations! Your application for the Summer Research Fellowship has been approved. "
+                + "Please note that the registration fee has been 100% waived for all university candidates. "
+                + "The deadline to confirm your acceptance is next Friday. No payment or deposit is required.";
+
+        Server.AnalysisResult result = Server.analyzeMessage(message);
+
+        System.out.println("\n[Test 6] Fee Waiver Notification & Standard Deadline (100% waived, confirm by next Friday)");
+        System.out.println(" -> Level: " + result.level + " | Score: " + result.score);
+        System.out.println(" -> Phrases flagged: " + result.suspiciousPhrases);
+
+        boolean passed = true;
+        if (!"low".equalsIgnoreCase(result.level)) {
+            System.err.println("   FAIL: Fee waiver message was incorrectly flagged with risk level: " + result.level);
+            passed = false;
+        }
+        if (result.score >= 35) {
+            System.err.println("   FAIL: Expected score < 35 for waived fee, got: " + result.score);
+            passed = false;
+        }
+        if (hasPhrase(result.suspiciousPhrases, "upfront payment")) {
+            System.err.println("   FAIL: False positive! Flagged upfront payment on message with 100% waived fee.");
+            passed = false;
+        }
+        if (hasPhrase(result.suspiciousPhrases, "urgency")) {
+            System.err.println("   FAIL: False positive! Ordinary 'deadline next Friday' was flagged as urgency pressure.");
+            passed = false;
+        }
+
+        if (passed) {
+            System.out.println("   PASSED ✅ (Fee waiver handled accurately with 0 false alarms for payment or urgency)");
             testsPassed++;
         }
     }
