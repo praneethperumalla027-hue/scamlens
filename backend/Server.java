@@ -150,9 +150,12 @@ public class Server {
                 try {
                     System.out.println("[ScamLens] Calling Gemma API (model: " + model + ")...");
                     result = callGemmaApi(message, apiKey, model);
-                    System.out.println("[ScamLens] Gemma AI analysis successful! Assigned risk: " + result.level);
+                    if (result != null) {
+                        System.out.println("[ScamLens] Gemma AI analysis successful! Assigned risk: " + result.level + " (Score: " + result.score + ")");
+                    }
                 } catch (Exception e) {
-                    System.err.println("[ScamLens] Gemma API request failed: " + e.getMessage());
+                    String cleanError = sanitizeErrorMessage(e.getMessage());
+                    System.err.println("[ScamLens] Gemma API request failed: " + cleanError);
                     System.out.println("[ScamLens] Automatically falling back to local heuristic rules...");
                 }
             }
@@ -169,9 +172,11 @@ public class Server {
 
     /**
      * Call Gemma API using Java 11+ HttpClient
+     * Configured with 45s request timeout, 10s connect timeout, and header-based authentication.
      */
     private static AnalysisResult callGemmaApi(String message, String apiKey, String model) throws Exception {
-        String endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent?key=" + apiKey;
+        // Clean endpoint without API key in URL (avoids secret leaks in logs/traces)
+        String endpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + model + ":generateContent";
 
         String prompt = "You are ScamLens, a security AI analyzing suspicious messages for scam indicators.\n"
                 + "Analyze the following message for fraud, phishing, advance-fee scam, or fake job/internship signals:\n\n"
@@ -189,26 +194,31 @@ public class Server {
 
         String requestJson = "{"
                 + "\"contents\":[{\"parts\":[{\"text\":\"" + escapeJson(prompt) + "\"}]}]"
-                + ",\"generationConfig\":{\"responseMimeType\":\"application/json\",\"temperature\":0.1}"
+                + ",\"generationConfig\":{\"responseMimeType\":\"application/json\",\"temperature\":0.1,\"maxOutputTokens\":800}"
                 + "}";
 
         HttpClient client = HttpClient.newBuilder()
-                .connectTimeout(Duration.ofSeconds(6))
+                .connectTimeout(Duration.ofSeconds(10))
                 .build();
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(endpoint))
-                .timeout(Duration.ofSeconds(12))
+                .timeout(Duration.ofSeconds(45))
                 .header("Content-Type", "application/json")
+                .header("x-goog-api-key", apiKey)
                 .POST(HttpRequest.BodyPublishers.ofString(requestJson, StandardCharsets.UTF_8))
                 .build();
 
+        long startTime = System.currentTimeMillis();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+        long elapsed = System.currentTimeMillis() - startTime;
 
         if (response.statusCode() != 200) {
-            throw new RuntimeException("HTTP " + response.statusCode() + " - " + response.body());
+            String sanitizedBody = sanitizeErrorMessage(response.body());
+            throw new RuntimeException("HTTP " + response.statusCode() + " after " + elapsed + "ms: " + sanitizedBody);
         }
 
+        System.out.println("[ScamLens] Gemma API completed successfully in " + elapsed + "ms (HTTP 200).");
         return parseGemmaResponse(response.body(), model);
     }
 
@@ -627,5 +637,21 @@ public class Server {
 
     private static String quote(String string) {
         return "\"" + escapeJson(string) + "\"";
+    }
+
+    /**
+     * Safely sanitize error messages before logging (strips secret patterns and caps length)
+     */
+    private static String sanitizeErrorMessage(String error) {
+        if (error == null || error.isBlank()) return "Unknown error";
+        // Strip out any accidental API keys or authorization tokens
+        String cleaned = error.replaceAll("(?i)(key|token|auth)=[^&\\s]+", "$1=[REDACTED]")
+                              .replaceAll("AQ\\.[0-9A-Za-z-_]{20,}", "[REDACTED_KEY]")
+                              .replaceAll("AIza[0-9A-Za-z-_]{30,}", "[REDACTED_KEY]");
+        // Truncate if very long
+        if (cleaned.length() > 300) {
+            cleaned = cleaned.substring(0, 300) + "... [truncated]";
+        }
+        return cleaned.trim();
     }
 }
