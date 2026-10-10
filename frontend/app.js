@@ -28,6 +28,7 @@ const riskBadge = document.getElementById('risk-badge');
 const riskLabel = document.getElementById('risk-label');
 const riskSummary = document.getElementById('risk-summary');
 const riskScorePill = document.getElementById('risk-score-pill');
+const enginePill = document.getElementById('engine-pill');
 const suspiciousPhrasesList = document.getElementById('suspicious-phrases');
 const explanationText = document.getElementById('explanation-text');
 const actionList = document.getElementById('action-list');
@@ -188,6 +189,12 @@ function validateAndRenderAssessment(data) {
 
   if (riskScorePill) {
     riskScorePill.textContent = score !== null ? `Risk Score: ${score} / 100` : 'Score: N/A';
+  }
+
+  if (enginePill) {
+    enginePill.textContent = (typeof data.engine === 'string' && data.engine.trim())
+      ? data.engine.trim()
+      : 'ScamLens';
   }
 
   // Populate suspicious phrases
