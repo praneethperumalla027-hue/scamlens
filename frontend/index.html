@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScamLens — Intelligent Scam & Fraud Detector</title>
+  <meta name="description" content="Check suspicious internship offers, scholarships, job postings, and payment requests with ScamLens.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">🛡️</div>
+        <div>
+          <h1 class="brand-title">ScamLens</h1>
+          <p class="brand-tagline">AI-powered suspicious message & offer inspector</p>
+        </div>
+      </div>
+      <div class="badge-pill">Hackathon Preview</div>
+    </header>
+
+    <!-- Main Content Grid -->
+    <main class="main-content">
+      <!-- Input Section -->
+      <section class="card input-card">
+        <div class="card-header">
+          <span class="step-num">Step 1</span>
+          <h2>Paste Suspicious Message</h2>
+          <p class="section-desc">Paste emails, SMS, WhatsApp messages, job offers, or payment requests below.</p>
+        </div>
+
+        <!-- Quick Sample Buttons for Instant Testing -->
+        <div class="sample-chips">
+          <span class="chips-label">Quick samples:</span>
+          <button type="button" class="chip-btn" id="sample-internship">💼 Fake Internship</button>
+          <button type="button" class="chip-btn" id="sample-payment">💳 Urgent UPI / Wire</button>
+          <button type="button" class="chip-btn" id="sample-scholarship">🎓 Unsolicited Grant</button>
+        </div>
+
+        <div class="input-wrapper">
+          <textarea 
+            id="message-input" 
+            placeholder="Example: 'Congratulations! You have been selected for an online data entry internship paying $800/week. Pay a $25 refundable registration fee immediately via UPI/crypto to confirm your slot...'"
+            rows="7"
+          ></textarea>
+          <div class="input-footer">
+            <span id="char-counter">0 characters</span>
+            <button type="button" class="clear-btn" id="clear-btn">Clear</button>
+          </div>
+        </div>
+
+        <button id="analyze-btn" class="primary-btn">
+          <span class="btn-icon">⚡</span>
+          <span class="btn-text">Analyze Message</span>
+        </button>
+      </section>
+
+      <!-- Results Section -->
+      <section class="card results-card" id="results-card">
+        <div class="card-header">
+          <span class="step-num">Step 2</span>
+          <h2>Analysis Assessment</h2>
+          <p class="section-desc">Detailed breakdown of potential fraud signals and safe precautions.</p>
+        </div>
+
+        <!-- Initial Placeholder State (Before Analysis) -->
+        <div class="empty-state" id="empty-state">
+          <div class="empty-icon">🔎</div>
+          <h3>Awaiting Input</h3>
+          <p>Paste a message on the left and click <strong>Analyze Message</strong> to see risk level, detected red flags, and next steps.</p>
+        </div>
+
+        <!-- Populated Results Container (Hidden initially) -->
+        <div class="results-content hidden" id="results-content">
+          <!-- Risk Banner -->
+          <div class="risk-badge" id="risk-badge">
+            <div class="risk-indicator" id="risk-indicator"></div>
+            <div>
+              <span class="risk-label" id="risk-label">High Risk</span>
+              <p class="risk-summary" id="risk-summary">Multiple severe scam indicators detected.</p>
+            </div>
+          </div>
+
+          <!-- Red Flags / Suspicious Phrases -->
+          <div class="result-block">
+            <h3 class="block-title">🚩 Suspicious Signals & Phrases</h3>
+            <ul class="tag-list" id="suspicious-phrases">
+              <!-- Dynamically added -->
+            </ul>
+          </div>
+
+          <!-- Explanation -->
+          <div class="result-block">
+            <h3 class="block-title">📋 Why This Looks Suspicious</h3>
+            <p class="explanation-text" id="explanation-text"></p>
+          </div>
+
+          <!-- Recommended Safe Steps -->
+          <div class="result-block">
+            <h3 class="block-title">🛡️ Recommended Safe Actions</h3>
+            <ol class="action-list" id="action-list">
+              <!-- Dynamically added -->
+            </ol>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Advisory Disclaimer -->
+    <footer class="app-disclaimer">
+      <div class="disclaimer-icon">⚠️</div>
+      <p>
+        <strong>Advisory Notice:</strong> ScamLens provides an automated assessment based on common fraudulent patterns and heuristics. It is an educational aid and does not guarantee that any message is safe or scam. Always independently verify offers via official websites and never transfer money or reveal credentials to unverified senders.
+      </p>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

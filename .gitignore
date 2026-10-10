@@ -1,0 +1,30 @@
+# Environment & Secrets (Never commit API keys!)
+.env
+*.env
+*.key
+secrets/
+config.properties
+
+# Java compiled output & build files
+*.class
+bin/
+build/
+out/
+target/
+*.jar
+*.war
+
+# IDE and Editor files
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Operating System files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Log files
+*.log
