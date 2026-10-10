@@ -388,10 +388,10 @@ public class Server {
             // If the clause specifically negates payment, skip it
             if (isNegatedPaymentClause(clause)) continue;
 
-            if (clause.matches(".*\\b(pay|send|transfer|wire|remit)\\b.*\\b(fee|fees|deposit|deposits|money|amount|funds|\\$|₹|rs|inr|upi|crypto|gift card)\\b.*")) return true;
+            if (clause.matches(".*\\b(pay|send|transfer|wire|remit)\\b.*\\b(fee|fees|deposit|deposits|money|amount|funds|\\$|\\u20B9|rs|inr|upi|crypto|gift card).*")) return true;
             if (clause.matches(".*\\b(registration|processing|application|onboarding|equipment|laptop|verification|refundable)\\s+(security\\s+)?(fee|fees|deposit|deposits)\\b.*")) return true;
-            if (clause.matches(".*\\b(fee|deposit)\\s+(is|of)\\s+(\\$|₹|rs|inr|[0-9]+).*")) return true;
-            if (clause.matches(".*\\b(pay|send)\\s+(\\$|₹|rs|inr|[0-9]+).*")) return true;
+            if (clause.matches(".*\\b(fee|deposit)\\s+(is|of)\\s+(\\$|\\u20B9|rs|inr|[0-9]+).*")) return true;
+            if (clause.matches(".*\\b(pay|send)\\s+(\\$|\\u20B9|rs|inr|[0-9]+).*")) return true;
             if (clause.matches(".*\\b(via|through|using)\\s+(upi|crypto|bitcoin|gift card).*")) return true;
         }
         return false;
@@ -417,13 +417,31 @@ public class Server {
     }
 
     /**
-     * Detects artificial urgency
+     * Detects artificial urgency and psychological pressure tactics.
+     * Accurately recognizes short windows (e.g. "within 30 minutes"), immediate action demands,
+     * and ultimatums (e.g. "avoid losing your seat"), while not misidentifying standard interview deadlines.
      */
     static boolean detectUrgency(String lower, List<String> phrases) {
-        boolean match = lower.contains("urgent") || lower.contains("immediately") || lower.contains("within 2 hours")
-                || lower.contains("within 24 hours") || lower.contains("within 1 hour") || lower.contains("tonight")
-                || lower.contains("account suspended") || lower.contains("disconnected") || lower.contains("act now")
-                || lower.contains("offer expires") || lower.contains("immediate action required");
+        // 1. Extreme short window: minutes or a few hours
+        boolean shortWindow = lower.matches(".*\\bwithin\\s+([0-9]+|one|two|three|half\\s+an?)\\s*(minute|min|second|sec|hour|hr)s?\\b.*");
+
+        // 2. Immediate action / pressure demands
+        boolean immediateAction = lower.matches(".*\\b(pay|transfer|send|act|respond|confirm|register)\\s+(immediately|urgently|right\\s+away)\\b.*")
+                || lower.contains("immediately") || lower.contains("urgently") || lower.contains("act now") || lower.contains("act fast");
+
+        // 3. Time pressure & expiration
+        boolean expirationPressure = lower.contains("today only") || lower.contains("only today")
+                || lower.contains("expires tonight") || lower.contains("tonight at") || lower.contains("last chance");
+
+        // 4. Fear of loss / Ultimatums
+        boolean fearOfLoss = lower.matches(".*\\b(avoid|before)\\s+losing\\s+(your\\s+)?(seat|slot|position|offer|internship|job|opportunity)\\b.*")
+                || lower.matches(".*\\b(your\\s+)?(offer|slot|seat|position|application)\\s+will\\s+expire\\b.*")
+                || lower.matches(".*\\b(slot|seat|position)\\s+will\\s+be\\s+(given|allocated|passed|released)\\b.*")
+                || lower.matches(".*\\b(account|service|connection)\\s+(will\\s+be\\s+)?(suspended|disconnected|blocked|terminated)\\b.*")
+                || lower.contains("immediate action required") || lower.contains("immediate response required")
+                || lower.contains("urgent notice") || lower.contains("urgent message");
+
+        boolean match = shortWindow || immediateAction || expirationPressure || fearOfLoss;
         if (match) {
             phrases.add("High urgency / psychological pressure");
         }
@@ -591,6 +609,19 @@ public class Server {
                     case 't' -> sb.append('\t');
                     case '"' -> sb.append('"');
                     case '\\' -> sb.append('\\');
+                    case 'u' -> {
+                        if (i + 4 < json.length()) {
+                            try {
+                                String hex = json.substring(i + 1, i + 5);
+                                sb.append((char) Integer.parseInt(hex, 16));
+                                i += 4;
+                            } catch (Exception ignored) {
+                                sb.append('u');
+                            }
+                        } else {
+                            sb.append('u');
+                        }
+                    }
                     default -> sb.append(c);
                 }
                 escaped = false;
@@ -627,6 +658,19 @@ public class Server {
                     case 't' -> sb.append('\t');
                     case '"' -> sb.append('"');
                     case '\\' -> sb.append('\\');
+                    case 'u' -> {
+                        if (i + 4 < json.length()) {
+                            try {
+                                String hex = json.substring(i + 1, i + 5);
+                                sb.append((char) Integer.parseInt(hex, 16));
+                                i += 4;
+                            } catch (Exception ignored) {
+                                sb.append('u');
+                            }
+                        } else {
+                            sb.append('u');
+                        }
+                    }
                     default -> sb.append(c);
                 }
                 escaped = false;
