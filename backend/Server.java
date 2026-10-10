@@ -290,42 +290,57 @@ public class Server {
 
     /**
      * Heuristic analysis logic (Rule-based fallback)
+     * Performs contextual detection, supports negation ("no registration fee"),
+     * and generates explanations strictly based on evidence found.
      */
-    private static AnalysisResult analyzeMessage(String message) {
+    static AnalysisResult analyzeMessage(String message) {
         String lower = message.toLowerCase();
 
         List<String> suspiciousPhrases = new ArrayList<>();
+        List<String> evidenceExplanations = new ArrayList<>();
         List<String> actions = new ArrayList<>();
         int score = 10;
 
-        // 1. Upfront Payment / Money Demands
-        if (lower.contains("fee") || lower.contains("deposit") || lower.contains("pay")
-                || lower.contains("registration fee") || lower.contains("refundable")
-                || lower.contains("crypto") || lower.contains("gift card") || lower.contains("upi")) {
+        // 1. Contextual Upfront Payment Detection (with Negation Handling)
+        boolean hasPayment = hasPaymentDemand(lower);
+        boolean hasNegatedPayment = hasExplicitNoFee(lower);
+
+        if (hasPayment) {
             suspiciousPhrases.add("Request for upfront payment, deposit, or fee");
+            evidenceExplanations.add("Requests upfront money, deposit, or fees (often disguised as refundable onboarding charges), which is characteristic of advance-fee scams.");
+            actions.add("Do NOT send money, UPI transfers, cryptocurrency, or gift cards.");
             score += 45;
+        } else if (hasNegatedPayment) {
+            // Reward explicit verification that no fees are required
+            score = Math.max(5, score - 5);
         }
 
-        // 2. Artificial Urgency / Pressure
-        if (lower.contains("urgent") || lower.contains("immediately") || lower.contains("within 2 hours")
-                || lower.contains("tonight") || lower.contains("account suspended") || lower.contains("disconnected")) {
-            suspiciousPhrases.add("High urgency / psychological pressure");
+        // 2. Artificial Urgency / Psychological Pressure
+        boolean hasUrgency = detectUrgency(lower, suspiciousPhrases);
+        if (hasUrgency) {
+            evidenceExplanations.add("Uses high urgency or pressure tactics to rush your decision before you have time to verify.");
+            actions.add("Do not rush. Legitimate employers allow reasonable time to evaluate opportunities.");
             score += 25;
         }
 
         // 3. Unrealistic Earnings / Unsolicited Rewards
-        if (lower.contains("no prior interview") || lower.contains("selected") || lower.contains("winner")
-                || lower.contains("won") || lower.contains("$45/hour") || lower.contains("$800/week")
-                || lower.contains("grant") || lower.contains("lottery")) {
-            suspiciousPhrases.add("Unsolicited reward or unrealistic compensation without interview");
+        boolean hasUnrealistic = detectUnrealisticOffer(lower, suspiciousPhrases);
+        if (hasUnrealistic) {
+            evidenceExplanations.add("Promises unrealistic compensation, selection without prior interview, or unearned prizes/grants.");
             score += 25;
         }
 
         // 4. Phishing links / Suspicious domains
-        if (lower.contains(".xyz") || lower.contains(".top") || lower.contains("bit.ly") || lower.contains("tinyurl")) {
-            suspiciousPhrases.add("Suspicious or shortened URL link");
+        boolean hasSuspiciousLink = detectSuspiciousLinks(lower, suspiciousPhrases);
+        if (hasSuspiciousLink) {
+            evidenceExplanations.add("Contains suspicious, shortened, or unverified URL links commonly associated with credential theft.");
+            actions.add("Do not click links or enter passwords/credentials on unverified domains.");
             score += 20;
         }
+
+        // Universal safe actions
+        actions.add("Verify the opportunity directly on the organization's official careers portal.");
+        actions.add("Never share one-time passwords (OTPs), bank account PINs, or sensitive documents.");
 
         score = Math.min(score, 98);
 
@@ -337,28 +352,108 @@ public class Server {
         if (score >= 60) {
             level = "high";
             label = "High Risk";
-            summary = "Multiple severe scam indicators detected, including upfront payment or urgent pressure.";
-            explanation = "Legitimate employers, grant committees, and official agencies do not demand upfront fees or create artificial panic to force quick money transfers. This pattern strongly matches standard advance-fee fraud.";
-            actions.add("Do NOT send money, UPI transfers, cryptocurrency, or gift cards.");
-            actions.add("Do not click links or download any file attachments.");
-            actions.add("Verify the company or agency independently on their official website.");
+            summary = "Multiple severe scam indicators detected in this message.";
+            explanation = "Warning signs identified: " + String.join(" ", evidenceExplanations)
+                    + " Legitimate organizations do not operate using these patterns.";
         } else if (score >= 35) {
             level = "medium";
             label = "Suspicious / Moderate Risk";
-            summary = "Contains some common red flags. Proceed with high caution.";
-            explanation = "The message contains potential urgency or unsolicited claims. While it could be automated marketing, it warrants independent verification.";
-            actions.add("Check the sender's exact email domain (not just display name).");
-            actions.add("Contact the organization through their official published phone number.");
+            summary = "Potential warning signals detected. Proceed with high caution.";
+            explanation = "Specific concerns identified: " + String.join(" ", evidenceExplanations)
+                    + " Exercise caution and independently verify the sender's identity.";
         } else {
             level = "low";
             label = "Low Risk Indicators";
-            summary = "No obvious urgency or payment demands found in primary heuristics.";
-            explanation = "The message does not trigger common high-risk scam keywords, but always exercise standard security hygiene.";
-            actions.add("Never share one-time passwords (OTPs), PINs, or credentials.");
-            actions.add("Ensure the communication came from a verified, official contact channel.");
+            if (hasNegatedPayment) {
+                summary = "No scam indicators found. The message explicitly states no fees are required.";
+                explanation = "The message explicitly clarifies that no application or registration fees are required, and contains no urgency or phishing links. Always verify directly via official company channels.";
+            } else {
+                summary = "No obvious urgency or payment demands found in primary heuristics.";
+                explanation = "The message does not trigger common high-risk scam patterns. Continue to follow standard online security hygiene.";
+            }
         }
 
         return new AnalysisResult(level, label, summary, explanation, suspiciousPhrases, actions, score, "Rule Heuristics");
+    }
+
+    /**
+     * Contextual payment detection:
+     * Splits into clauses and verifies that payment keywords are not part of a negated statement.
+     */
+    static boolean hasPaymentDemand(String lower) {
+        String[] clauses = lower.split("[.!?;\\n]+");
+        for (String clause : clauses) {
+            clause = clause.trim();
+            if (clause.isEmpty()) continue;
+            // If the clause specifically negates payment, skip it
+            if (isNegatedPaymentClause(clause)) continue;
+
+            if (clause.matches(".*\\b(pay|send|transfer|wire|remit)\\b.*\\b(fee|fees|deposit|deposits|money|amount|funds|\\$|₹|rs|inr|upi|crypto|gift card)\\b.*")) return true;
+            if (clause.matches(".*\\b(registration|processing|application|onboarding|equipment|laptop|verification|refundable)\\s+(security\\s+)?(fee|fees|deposit|deposits)\\b.*")) return true;
+            if (clause.matches(".*\\b(fee|deposit)\\s+(is|of)\\s+(\\$|₹|rs|inr|[0-9]+).*")) return true;
+            if (clause.matches(".*\\b(pay|send)\\s+(\\$|₹|rs|inr|[0-9]+).*")) return true;
+            if (clause.matches(".*\\b(via|through|using)\\s+(upi|crypto|bitcoin|gift card).*")) return true;
+        }
+        return false;
+    }
+
+    /**
+     * Checks if a clause contains a negated payment statement like:
+     * "no application or registration fee", "no fee", "never ask you to pay", "without any fee"
+     */
+    static boolean isNegatedPaymentClause(String s) {
+        if (s.matches(".*\\bno\\s+([a-z]+\\s+){0,4}(fee|fees|deposit|deposits|charge|charges|cost|costs|payment|payments)\\b.*")) return true;
+        if (s.matches(".*\\b(never|not|won't|will not)\\s+([a-z]+\\s+){0,4}(ask|require|demand)\\b.*\\b(pay|fee|deposit|money)\\b.*")) return true;
+        if (s.matches(".*\\b(not\\s+be\\s+asked\\s+to\\s+pay|do\\s+not\\s+pay|not\\s+require\\s+payment)\\b.*")) return true;
+        if (s.contains("free of cost") || s.contains("free of charge") || s.contains("at no cost") || s.contains("without any fee") || s.contains("without paying")) return true;
+        return false;
+    }
+
+    /**
+     * Checks if the overall message contains an explicit statement confirming no fees
+     */
+    static boolean hasExplicitNoFee(String lower) {
+        return isNegatedPaymentClause(lower);
+    }
+
+    /**
+     * Detects artificial urgency
+     */
+    static boolean detectUrgency(String lower, List<String> phrases) {
+        boolean match = lower.contains("urgent") || lower.contains("immediately") || lower.contains("within 2 hours")
+                || lower.contains("within 24 hours") || lower.contains("within 1 hour") || lower.contains("tonight")
+                || lower.contains("account suspended") || lower.contains("disconnected") || lower.contains("act now")
+                || lower.contains("offer expires") || lower.contains("immediate action required");
+        if (match) {
+            phrases.add("High urgency / psychological pressure");
+        }
+        return match;
+    }
+
+    /**
+     * Detects unrealistic offers / compensation without interviews
+     */
+    static boolean detectUnrealisticOffer(String lower, List<String> phrases) {
+        boolean match = lower.contains("no prior interview") || lower.contains("no interview needed")
+                || lower.contains("selected without interview") || lower.contains("winner")
+                || lower.contains("won the lottery") || lower.contains("unsolicited grant")
+                || lower.contains("$45/hour") || lower.contains("$800/week") || lower.contains("lottery");
+        if (match) {
+            phrases.add("Unsolicited reward or unrealistic compensation without interview");
+        }
+        return match;
+    }
+
+    /**
+     * Detects suspicious / shortened / free TLD links
+     */
+    static boolean detectSuspiciousLinks(String lower, List<String> phrases) {
+        boolean match = lower.contains(".xyz") || lower.contains(".top") || lower.contains("bit.ly")
+                || lower.contains("tinyurl") || lower.contains(".is.gd") || lower.contains(".online");
+        if (match) {
+            phrases.add("Suspicious or shortened URL link");
+        }
+        return match;
     }
 
     /**
