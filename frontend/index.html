@@ -75,15 +75,34 @@
           <p>Paste a message on the left and click <strong>Analyze Message</strong> to see risk level, detected red flags, and next steps.</p>
         </div>
 
+        <!-- Loading State -->
+        <div class="loading-state hidden" id="loading-state">
+          <div class="loading-spinner"></div>
+          <h3>Analyzing with ScamLens</h3>
+          <p>Evaluating message indicators via Java backend (port 8080)...</p>
+        </div>
+
+        <!-- Error State -->
+        <div class="error-state hidden" id="error-state">
+          <div class="error-icon">⚠️</div>
+          <h3 id="error-title">Backend Server Unreachable</h3>
+          <p id="error-message">Could not connect to the ScamLens Java server at <code>http://localhost:8080</code>.</p>
+          <div class="error-tip">
+            <span>Troubleshooting:</span> Ensure the Java server is running in your terminal:
+            <pre><code>java -cp backend Server</code></pre>
+          </div>
+        </div>
+
         <!-- Populated Results Container (Hidden initially) -->
         <div class="results-content hidden" id="results-content">
           <!-- Risk Banner -->
           <div class="risk-badge" id="risk-badge">
             <div class="risk-indicator" id="risk-indicator"></div>
-            <div>
+            <div class="risk-text-group">
               <span class="risk-label" id="risk-label">High Risk</span>
               <p class="risk-summary" id="risk-summary">Multiple severe scam indicators detected.</p>
             </div>
+            <span class="risk-score-pill" id="risk-score-pill">Score: 80 / 100</span>
           </div>
 
           <!-- Red Flags / Suspicious Phrases -->

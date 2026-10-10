@@ -1,25 +1,33 @@
 /**
  * ScamLens — Frontend Interaction Script
  * 
- * In this step, this script handles:
- * 1. Sample message insertion buttons
- * 2. Character counter & input clearing
- * 3. A client-side demonstration analyzer (so you can test the UI immediately)
- * 
- * In the next step, we will connect this to our Java backend server!
+ * Connected to the ScamLens Java Backend Server:
+ * Endpoint: POST http://localhost:8080/api/analyze
  */
 
-// DOM Elements
+// API Configuration
+const API_BASE_URL = 'http://localhost:8080';
+const ANALYZE_ENDPOINT = `${API_BASE_URL}/api/analyze`;
+
+// DOM Elements — Inputs & Controls
 const messageInput = document.getElementById('message-input');
 const charCounter = document.getElementById('char-counter');
 const clearBtn = document.getElementById('clear-btn');
 const analyzeBtn = document.getElementById('analyze-btn');
 
+// DOM Elements — Results & State Views
 const emptyState = document.getElementById('empty-state');
+const loadingState = document.getElementById('loading-state');
+const errorState = document.getElementById('error-state');
+const errorTitle = document.getElementById('error-title');
+const errorMessage = document.getElementById('error-message');
 const resultsContent = document.getElementById('results-content');
+
+// DOM Elements — Assessment Output Fields
 const riskBadge = document.getElementById('risk-badge');
 const riskLabel = document.getElementById('risk-label');
 const riskSummary = document.getElementById('risk-summary');
+const riskScorePill = document.getElementById('risk-score-pill');
 const suspiciousPhrasesList = document.getElementById('suspicious-phrases');
 const explanationText = document.getElementById('explanation-text');
 const actionList = document.getElementById('action-list');
@@ -41,10 +49,11 @@ messageInput.addEventListener('input', () => {
 clearBtn.addEventListener('click', () => {
   messageInput.value = '';
   charCounter.textContent = '0 characters';
+  showState('empty');
   messageInput.focus();
 });
 
-// 3. Sample Chips
+// 3. Quick Sample Chips
 document.getElementById('sample-internship').addEventListener('click', () => {
   messageInput.value = sampleMessages.internship;
   messageInput.dispatchEvent(new Event('input'));
@@ -60,86 +69,184 @@ document.getElementById('sample-scholarship').addEventListener('click', () => {
   messageInput.dispatchEvent(new Event('input'));
 });
 
-// 4. Client-side Preview Analyzer (Placeholder for Step 1 testing)
-analyzeBtn.addEventListener('click', () => {
+// 4. View State Controller (Empty / Loading / Error / Results)
+function showState(state) {
+  emptyState.classList.add('hidden');
+  loadingState.classList.add('hidden');
+  errorState.classList.add('hidden');
+  resultsContent.classList.add('hidden');
+
+  switch (state) {
+    case 'loading':
+      loadingState.classList.remove('hidden');
+      break;
+    case 'error':
+      errorState.classList.remove('hidden');
+      break;
+    case 'results':
+      resultsContent.classList.remove('hidden');
+      break;
+    case 'empty':
+    default:
+      emptyState.classList.remove('hidden');
+      break;
+  }
+}
+
+// 5. Analyze Button Click Handler (Real Java Backend Connection)
+analyzeBtn.addEventListener('click', async () => {
   const text = messageInput.value.trim();
 
   if (!text) {
-    alert("Please paste or type a message first, or click one of the quick samples above!");
+    alert("Please paste or type a message first, or select one of the quick samples above!");
+    messageInput.focus();
     return;
   }
 
-  // Simulate analysis state
+  // Set button loading state
   analyzeBtn.disabled = true;
-  analyzeBtn.querySelector('.btn-text').textContent = 'Analyzing...';
+  const btnTextSpan = analyzeBtn.querySelector('.btn-text');
+  const originalText = btnTextSpan ? btnTextSpan.textContent : 'Analyze Message';
+  if (btnTextSpan) btnTextSpan.textContent = 'Analyzing...';
 
-  setTimeout(() => {
-    // Basic local keyword check for initial UI demonstration
-    const lower = text.toLowerCase();
-    const hasUrgency = lower.includes('urgent') || lower.includes('immediately') || lower.includes('within 2 hours');
-    const hasMoneyDemand = lower.includes('fee') || lower.includes('deposit') || lower.includes('pay') || lower.includes('crypto');
-    const hasUnrealisticOffer = lower.includes('$45/hour') || lower.includes('no prior interview') || lower.includes('won');
+  // Show loading view
+  showState('loading');
 
-    let assessment = {
-      level: 'high',
-      label: 'High Risk',
-      summary: 'Multiple classic scam indicators detected (urgent pressure & upfront payment request).',
-      phrases: ['Refundable security deposit', 'Pay within 2 hours', 'No prior interview needed'],
-      explanation: 'Legitimate employers and institutions never ask candidates to pay an upfront refundable fee or deposit for equipment or processing. Creating artificial urgency is a common psychological manipulation tactic.',
-      actions: [
-        'Do not send any money, UPI transfers, or gift card codes.',
-        'Never click unknown links or download attachments from this sender.',
-        'Verify the opportunity directly on the official company careers portal.'
-      ]
-    };
+  try {
+    const response = await fetch(ANALYZE_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ message: text })
+    });
 
-    if (!hasMoneyDemand && !hasUrgency) {
-      assessment = {
-        level: 'low',
-        label: 'Low Risk Indicators',
-        summary: 'No obvious urgency or payment demands found in quick heuristics.',
-        phrases: ['No immediate high-risk phrases detected'],
-        explanation: 'The message does not contain blatant scam signals, but stay cautious. Scammers can be subtle.',
-        actions: [
-          'Verify sender email domain matches the official organization.',
-          'Never reveal passwords, OTPs, or personal identity numbers.'
-        ]
-      };
+    if (!response.ok) {
+      let serverError = `Server responded with HTTP ${response.status}`;
+      try {
+        const errorJson = await response.json();
+        if (errorJson && errorJson.error) {
+          serverError = errorJson.error;
+        }
+      } catch (_) {
+        // Fall back to HTTP status message
+      }
+      throw new Error(serverError);
     }
 
-    renderAssessment(assessment);
+    const data = await response.json();
+    validateAndRenderAssessment(data);
 
+  } catch (err) {
+    console.error('[ScamLens] Backend request failed:', err);
+    displayFriendlyError(err);
+  } finally {
+    // Restore button state
     analyzeBtn.disabled = false;
-    analyzeBtn.querySelector('.btn-text').textContent = 'Analyze Message';
-  }, 400);
+    if (btnTextSpan) btnTextSpan.textContent = originalText;
+  }
 });
 
-// 5. Render Assessment to UI
-function renderAssessment(data) {
-  emptyState.classList.add('hidden');
-  resultsContent.classList.remove('hidden');
+// 6. Response Validation & Safe DOM Rendering
+function validateAndRenderAssessment(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error("Invalid response format received from server.");
+  }
 
-  // Set risk class (high, medium, low)
-  riskBadge.className = `risk-badge ${data.level}`;
-  riskLabel.textContent = data.label;
-  riskSummary.textContent = data.summary;
+  // Validate risk level against permitted CSS themes
+  const allowedLevels = ['high', 'medium', 'low'];
+  const level = (data.level && allowedLevels.includes(String(data.level).toLowerCase()))
+    ? String(data.level).toLowerCase()
+    : 'medium';
 
-  // Suspicious phrases
-  suspiciousPhrasesList.innerHTML = '';
-  data.phrases.forEach(phrase => {
+  // Sanitize text values
+  const label = (typeof data.label === 'string' && data.label.trim())
+    ? data.label.trim()
+    : 'Assessment Complete';
+
+  const summary = (typeof data.summary === 'string' && data.summary.trim())
+    ? data.summary.trim()
+    : 'No summary provided.';
+
+  const explanation = (typeof data.explanation === 'string' && data.explanation.trim())
+    ? data.explanation.trim()
+    : 'No additional explanation available.';
+
+  // Validate score
+  const score = (typeof data.score === 'number' && !Number.isNaN(data.score))
+    ? Math.max(0, Math.min(100, Math.round(data.score)))
+    : null;
+
+  // Validate arrays
+  const phrases = Array.isArray(data.phrases) ? data.phrases : [];
+  const actions = Array.isArray(data.actions) ? data.actions : [];
+
+  // Safe DOM updates using textContent (preventing any XSS vulnerabilities)
+  riskBadge.className = `risk-badge ${level}`;
+  riskLabel.textContent = label;
+  riskSummary.textContent = summary;
+
+  if (riskScorePill) {
+    riskScorePill.textContent = score !== null ? `Risk Score: ${score} / 100` : 'Score: N/A';
+  }
+
+  // Populate suspicious phrases
+  clearChildren(suspiciousPhrasesList);
+  if (phrases.length === 0) {
     const li = document.createElement('li');
-    li.textContent = phrase;
+    li.textContent = 'No explicit high-risk keywords detected';
     suspiciousPhrasesList.appendChild(li);
-  });
+  } else {
+    phrases.forEach(phrase => {
+      const li = document.createElement('li');
+      li.textContent = String(phrase);
+      suspiciousPhrasesList.appendChild(li);
+    });
+  }
 
-  // Explanation
-  explanationText.textContent = data.explanation;
+  // Populate explanation
+  explanationText.textContent = explanation;
 
-  // Action steps
-  actionList.innerHTML = '';
-  data.actions.forEach(act => {
+  // Populate recommended safe actions
+  clearChildren(actionList);
+  if (actions.length === 0) {
     const li = document.createElement('li');
-    li.textContent = act;
+    li.textContent = 'Always exercise caution when interacting with unverified senders.';
     actionList.appendChild(li);
-  });
+  } else {
+    actions.forEach(action => {
+      const li = document.createElement('li');
+      li.textContent = String(action);
+      actionList.appendChild(li);
+    });
+  }
+
+  // Switch to results view
+  showState('results');
+}
+
+// 7. Friendly Error Handler
+function displayFriendlyError(err) {
+  showState('error');
+
+  const isNetworkFailure = err.name === 'TypeError' || (err.message && err.message.toLowerCase().includes('failed to fetch'));
+
+  if (isNetworkFailure) {
+    if (errorTitle) errorTitle.textContent = "Java Backend Offline";
+    if (errorMessage) {
+      errorMessage.textContent = "Could not reach http://localhost:8080. The Java backend server is not running or port 8080 is blocked.";
+    }
+  } else {
+    if (errorTitle) errorTitle.textContent = "Analysis Request Error";
+    if (errorMessage) {
+      errorMessage.textContent = err.message || "An unexpected error occurred while communicating with the server.";
+    }
+  }
+}
+
+// Helper: Safely remove all child nodes without unsafe innerHTML
+function clearChildren(parent) {
+  while (parent.firstChild) {
+    parent.removeChild(parent.firstChild);
+  }
 }
