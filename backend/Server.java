@@ -20,26 +20,44 @@ public class Server {
 
     private static final int PORT = 8080;
 
-    public static void main(String[] args) throws IOException {
-        // Create an HTTP server listening on all interfaces at port 8080
-        HttpServer server = HttpServer.create(new InetSocketAddress(PORT), 0);
+    public static void main(String[] args) {
+        int port = PORT;
+        if (args.length > 0) {
+            try {
+                port = Integer.parseInt(args[0]);
+            } catch (NumberFormatException e) {
+                System.err.println("Invalid port number: " + args[0] + ". Using default port " + PORT);
+            }
+        }
 
-        // Endpoints
-        server.createContext("/api/health", new HealthHandler());
-        server.createContext("/api/analyze", new AnalyzeHandler());
+        try {
+            // Create an HTTP server listening on all interfaces at the chosen port
+            HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
 
-        // Default thread executor
-        server.setExecutor(null);
+            // Endpoints
+            server.createContext("/api/health", new HealthHandler());
+            server.createContext("/api/analyze", new AnalyzeHandler());
 
-        System.out.println("==================================================");
-        System.out.println(" 🛡️  ScamLens Java Backend is running!");
-        System.out.println(" Server Port : http://localhost:" + PORT);
-        System.out.println(" Health Check: http://localhost:" + PORT + "/api/health");
-        System.out.println(" Analyze API : http://localhost:" + PORT + "/api/analyze (POST)");
-        System.out.println(" Press Ctrl+C in terminal to stop the server.");
-        System.out.println("==================================================");
+            // Default thread executor
+            server.setExecutor(null);
 
-        server.start();
+            System.out.println("==================================================");
+            System.out.println(" 🛡️  ScamLens Java Backend is running!");
+            System.out.println(" Server Port : http://localhost:" + port);
+            System.out.println(" Health Check: http://localhost:" + port + "/api/health");
+            System.out.println(" Analyze API : http://localhost:" + port + "/api/analyze (POST)");
+            System.out.println(" Press Ctrl+C in this terminal to stop the server.");
+            System.out.println("==================================================");
+
+            server.start();
+        } catch (java.net.BindException e) {
+            System.err.println("\n❌ Port " + port + " is already in use by another program.");
+            System.err.println("👉 Troubleshooting tips:");
+            System.err.println("   1. Check if another terminal window is already running ScamLens.");
+            System.err.println("   2. Close the other instance, or specify a different port: java -cp backend Server <port>");
+        } catch (IOException e) {
+            System.err.println("❌ Failed to start server: " + e.getMessage());
+        }
     }
 
     /**
