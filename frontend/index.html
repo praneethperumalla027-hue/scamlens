@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ScamLens — Intelligent Scam & Fraud Detector</title>
-  <meta name="description" content="Check suspicious internship offers, scholarships, job postings, and payment requests with ScamLens.">
+  <title>ScamLens — Explain Before You Trust | AI Scam Detector</title>
+  <meta name="description" content="ScamLens: Explain Before You Trust. Grounded evidence analysis for job, internship, scholarship, and payment messages using Google Gemma AI and local heuristics.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -17,11 +17,17 @@
       <div class="brand">
         <div class="brand-icon">🛡️</div>
         <div>
-          <h1 class="brand-title">ScamLens</h1>
-          <p class="brand-tagline">AI-powered suspicious message & offer inspector</p>
+          <div class="brand-header-row">
+            <h1 class="brand-title">ScamLens</h1>
+            <span class="motto-tag">Explain Before You Trust</span>
+          </div>
+          <p class="brand-tagline">Grounded evidence analysis for suspicious offers, scholarships, and payment requests</p>
         </div>
       </div>
-      <div class="badge-pill">Hackathon Preview</div>
+      <div class="header-badges">
+        <span class="badge-pill">Dual-Engine AI</span>
+        <span class="badge-pill outline">Zero Dependencies</span>
+      </div>
     </header>
 
     <!-- Main Content Grid -->
@@ -30,56 +36,96 @@
       <section class="card input-card">
         <div class="card-header">
           <span class="step-num">Step 1</span>
-          <h2>Paste Suspicious Message</h2>
-          <p class="section-desc">Paste emails, SMS, WhatsApp messages, job offers, or payment requests below.</p>
+          <h2>Submit Message for Inspection</h2>
+          <p class="section-desc">Paste an email, SMS, WhatsApp offer, or payment request. Select a demo scenario below to test instantly.</p>
         </div>
 
-        <!-- Quick Sample Buttons for Instant Testing -->
-        <div class="sample-chips">
-          <span class="chips-label">Quick samples:</span>
-          <button type="button" class="chip-btn" id="sample-internship">💼 Fake Internship</button>
-          <button type="button" class="chip-btn" id="sample-payment">💳 Urgent UPI / Wire</button>
-          <button type="button" class="chip-btn" id="sample-scholarship">🎓 Unsolicited Grant</button>
+        <!-- Curated Demo Scenarios -->
+        <div class="demo-selector">
+          <div class="demo-label-row">
+            <span class="chips-label">🎯 Select Demo Scenario:</span>
+            <span class="demo-hint">Click any scenario to populate and preview</span>
+          </div>
+          <div class="demo-grid">
+            <button type="button" class="demo-card active" id="demo-contradiction" data-demo="contradiction">
+              <div class="demo-card-icon">🎭</div>
+              <div class="demo-card-content">
+                <strong>Fee Contradiction</strong>
+                <span>"No fee" + ₹799 deposit in 30 min</span>
+              </div>
+            </button>
+            <button type="button" class="demo-card" id="demo-phishing" data-demo="phishing">
+              <div class="demo-card-icon">⚡</div>
+              <div class="demo-card-content">
+                <strong>Urgent Phishing</strong>
+                <span>Disconnection threat + .xyz domain</span>
+              </div>
+            </button>
+            <button type="button" class="demo-card" id="demo-legitimate" data-demo="legitimate">
+              <div class="demo-card-icon">✅</div>
+              <div class="demo-card-content">
+                <strong>Legitimate Offer</strong>
+                <span>Verified tech internship, zero fee</span>
+              </div>
+            </button>
+            <button type="button" class="demo-card" id="demo-waiver" data-demo="waiver">
+              <div class="demo-card-icon">🎓</div>
+              <div class="demo-card-content">
+                <strong>Fee Waiver (Benign)</strong>
+                <span>100% waiver, deadline next Friday</span>
+              </div>
+            </button>
+          </div>
         </div>
 
+        <!-- Input Textarea Wrapper -->
         <div class="input-wrapper">
           <textarea 
             id="message-input" 
-            placeholder="Example: 'Congratulations! You have been selected for an online data entry internship paying $800/week. Pay a $25 refundable registration fee immediately via UPI/crypto to confirm your slot...'"
+            placeholder="Paste suspicious message here..."
             rows="7"
           ></textarea>
           <div class="input-footer">
             <span id="char-counter">0 characters</span>
-            <button type="button" class="clear-btn" id="clear-btn">Clear</button>
+            <div class="input-actions">
+              <button type="button" class="text-btn" id="clear-btn">Clear</button>
+            </div>
           </div>
         </div>
 
-        <button id="analyze-btn" class="primary-btn">
-          <span class="btn-icon">⚡</span>
-          <span class="btn-text">Analyze Message</span>
-        </button>
+        <!-- Action Buttons -->
+        <div class="action-buttons-row">
+          <button id="analyze-btn" class="primary-btn">
+            <span class="btn-icon">⚡</span>
+            <span class="btn-text">Analyze Message</span>
+          </button>
+          <button id="try-example-btn" class="secondary-btn" type="button">
+            <span class="btn-icon">🚀</span>
+            <span class="btn-text">Try Example & Analyze</span>
+          </button>
+        </div>
       </section>
 
       <!-- Results Section -->
       <section class="card results-card" id="results-card">
         <div class="card-header">
           <span class="step-num">Step 2</span>
-          <h2>Analysis Assessment</h2>
-          <p class="section-desc">Detailed breakdown of potential fraud signals and safe precautions.</p>
+          <h2>Grounded Risk Assessment</h2>
+          <p class="section-desc">Grounded evidence, observed quotes, explanations, and safe verification steps.</p>
         </div>
 
         <!-- Initial Placeholder State (Before Analysis) -->
         <div class="empty-state" id="empty-state">
           <div class="empty-icon">🔎</div>
           <h3>Awaiting Input</h3>
-          <p>Paste a message on the left and click <strong>Analyze Message</strong> to see risk level, detected red flags, and next steps.</p>
+          <p>Paste a message or select one of the demo scenarios above and click <strong>Analyze Message</strong> to inspect grounded evidence.</p>
         </div>
 
         <!-- Loading State -->
         <div class="loading-state hidden" id="loading-state">
           <div class="loading-spinner"></div>
-          <h3>Analyzing with ScamLens</h3>
-          <p>Evaluating message indicators via Java backend (port 8080)...</p>
+          <h3>Analyzing Evidence with ScamLens</h3>
+          <p id="loading-subtext">Evaluating message indicators via Java backend server...</p>
         </div>
 
         <!-- Error State -->
@@ -101,25 +147,47 @@
             <div class="risk-text-group">
               <div class="risk-header-row">
                 <span class="risk-label" id="risk-label">High Risk</span>
-                <span class="engine-pill" id="engine-pill">Gemma AI</span>
+                <span class="engine-pill" id="engine-pill">Rule Heuristics</span>
               </div>
-              <p class="risk-summary" id="risk-summary">Multiple severe scam indicators detected.</p>
+              <p class="risk-summary" id="risk-summary">Assessment summary</p>
             </div>
             <span class="risk-score-pill" id="risk-score-pill">Score: 80 / 100</span>
           </div>
 
-          <!-- Red Flags / Suspicious Phrases -->
-          <div class="result-block">
-            <h3 class="block-title">🚩 Suspicious Signals & Phrases</h3>
-            <ul class="tag-list" id="suspicious-phrases">
-              <!-- Dynamically added -->
-            </ul>
+          <!-- Deceptive Contradiction Alert (Rendered conditionally) -->
+          <div class="contradiction-alert hidden" id="contradiction-block">
+            <div class="alert-icon">⚠️</div>
+            <div class="alert-content">
+              <strong>Deceptive Contradiction Identified</strong>
+              <p id="contradiction-text">The message claims no fees are required while simultaneously demanding an upfront deposit.</p>
+            </div>
           </div>
 
-          <!-- Explanation -->
+          <!-- Grounded Evidence & Quotes Section -->
+          <div class="result-block" id="findings-block">
+            <div class="block-header-row">
+              <h3 class="block-title">📌 Grounded Evidence & Observed Quotes</h3>
+              <span class="grounded-count-pill" id="grounded-count">0 signals grounded</span>
+            </div>
+            <p class="block-subtitle">Every quote below is verified to exist verbatim in the submitted message text.</p>
+            <div class="findings-container" id="findings-container">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- Analytical Explanation Section -->
           <div class="result-block">
-            <h3 class="block-title">📋 Why This Looks Suspicious</h3>
+            <h3 class="block-title">📋 Detailed Analysis & Inference</h3>
             <p class="explanation-text" id="explanation-text"></p>
+          </div>
+
+          <!-- Uncertainty & Confidence Disclosure -->
+          <div class="uncertainty-box" id="uncertainty-box">
+            <div class="uncertainty-header">
+              <span class="uncertainty-icon">⚖️</span>
+              <strong>Analytical Nuance & Uncertainty Disclosure</strong>
+            </div>
+            <p id="uncertainty-text">Automated textual assessment based on observed patterns.</p>
           </div>
 
           <!-- Recommended Safe Steps -->
@@ -133,12 +201,14 @@
       </section>
     </main>
 
-    <!-- Advisory Disclaimer -->
+    <!-- Advisory & Transparency Disclaimer -->
     <footer class="app-disclaimer">
-      <div class="disclaimer-icon">⚠️</div>
-      <p>
-        <strong>Advisory Notice:</strong> ScamLens provides an automated assessment based on common fraudulent patterns and heuristics. It is an educational aid and does not guarantee that any message is safe or scam. Always independently verify offers via official websites and never transfer money or reveal credentials to unverified senders.
-      </p>
+      <div class="disclaimer-icon">ℹ️</div>
+      <div class="disclaimer-content">
+        <p>
+          <strong>Transparency Notice:</strong> ScamLens provides an automated risk assessment based on textual pattern heuristics and language modeling. It is an educational verification assistant and does not constitute definitive proof of fraud or a calibrated mathematical probability. ScamLens does not perform real-time domain registrar WHOIS lookups or live company credit registry verifications. Always confirm employment and scholarship offers through independently verified official channels.
+        </p>
+      </div>
     </footer>
   </div>
 

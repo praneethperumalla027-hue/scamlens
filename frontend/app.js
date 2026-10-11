@@ -1,5 +1,6 @@
 /**
- * ScamLens — Frontend Interaction Script
+ * ScamLens — Frontend Interaction & Evidence Presentation Script
+ * "Explain Before You Trust"
  * 
  * Connected to the ScamLens Java Backend Server:
  * Endpoint: POST http://localhost:8080/api/analyze
@@ -21,7 +22,7 @@ function getApiBaseUrl() {
   if (typeof window !== 'undefined' && window.location && window.location.origin) {
     const host = window.location.hostname;
     const protocol = window.location.protocol;
-    if (protocol.startsWith('http') && host !== 'localhost' && host !== '127.0.0.1' && !host.endsWith('.local')) {
+    if (protocol.startsWith('http') && host !== 'localhost' && host !== '127.0.0.1' && !host.endsWith('.local') && !host.endsWith('github.io')) {
       return window.location.origin;
     }
   }
@@ -37,6 +38,8 @@ const messageInput = document.getElementById('message-input');
 const charCounter = document.getElementById('char-counter');
 const clearBtn = document.getElementById('clear-btn');
 const analyzeBtn = document.getElementById('analyze-btn');
+const tryExampleBtn = document.getElementById('try-example-btn');
+const demoCards = document.querySelectorAll('.demo-card');
 
 // DOM Elements — Results & State Views
 const emptyState = document.getElementById('empty-state');
@@ -52,48 +55,74 @@ const riskLabel = document.getElementById('risk-label');
 const riskSummary = document.getElementById('risk-summary');
 const riskScorePill = document.getElementById('risk-score-pill');
 const enginePill = document.getElementById('engine-pill');
-const suspiciousPhrasesList = document.getElementById('suspicious-phrases');
+
+const contradictionBlock = document.getElementById('contradiction-block');
+const contradictionText = document.getElementById('contradiction-text');
+
+const findingsContainer = document.getElementById('findings-container');
+const groundedCount = document.getElementById('grounded-count');
 const explanationText = document.getElementById('explanation-text');
+const uncertaintyBox = document.getElementById('uncertainty-box');
+const uncertaintyText = document.getElementById('uncertainty-text');
 const actionList = document.getElementById('action-list');
 
-// Quick sample templates
-const sampleMessages = {
-  internship: "Congratulations! You have been selected for an exclusive remote data entry internship at Global Tech LLC paying $45/hour. No prior interview needed! To finalize onboarding and reserve your company laptop, kindly pay a refundable security deposit of $30 via UPI / crypto within 2 hours.",
-  payment: "URGENT NOTICE: Your electricity connection will be disconnected tonight at 9:30 PM due to an unpaid bill. Please immediately call our officer at +91-98765-XXXXX or pay via this link http://pay-bill-quick-now.xyz to avoid disruption.",
-  scholarship: "Dear Student, you have won the $5,000 International Merit Grant 2026. Claim your grant code by confirming your banking credentials and sending a $15 processing fee."
+// Curated Demo Scenarios
+const demoScenarios = {
+  contradiction: "Congratulations! There is no application fee for this role. However, you must pay a refundable security deposit of \u20B9799 within 30 minutes to secure your seat. The deposit will be returned after your interview.",
+  phishing: "URGENT NOTICE: Your electricity connection will be suspended tonight at 9:30 PM due to an unpaid bill. Please immediately call our officer at +91-98765-XXXXX or pay via this link http://pay-bill-quick-now.xyz to avoid disruption.",
+  legitimate: "Congratulations! We are pleased to invite you for an interview for the Software Engineering Internship at Acme Corp. Please note that there is no application or registration fee for this hiring process. We will never ask you to pay for equipment or onboarding. Please schedule your interview on our official careers portal.",
+  waiver: "Congratulations! Your application for the Summer Research Fellowship has been approved. Please note that the registration fee has been 100% waived for all university candidates. The deadline to confirm your acceptance is next Friday. No payment or deposit is required."
 };
 
+let activeDemoKey = 'contradiction';
+
+// Initialize with default demo scenario text
+if (messageInput && !messageInput.value.trim()) {
+  messageInput.value = demoScenarios.contradiction;
+  updateCharCounter();
+}
+
 // 1. Character Counter
-messageInput.addEventListener('input', () => {
+function updateCharCounter() {
+  if (!messageInput || !charCounter) return;
   const count = messageInput.value.length;
   charCounter.textContent = `${count} character${count === 1 ? '' : 's'}`;
-});
+}
+
+messageInput.addEventListener('input', updateCharCounter);
 
 // 2. Clear Button
 clearBtn.addEventListener('click', () => {
   messageInput.value = '';
-  charCounter.textContent = '0 characters';
+  updateCharCounter();
+  demoCards.forEach(c => c.classList.remove('active'));
   showState('empty');
   messageInput.focus();
 });
 
-// 3. Quick Sample Chips
-document.getElementById('sample-internship').addEventListener('click', () => {
-  messageInput.value = sampleMessages.internship;
-  messageInput.dispatchEvent(new Event('input'));
+// 3. Demo Scenario Selector Handlers
+demoCards.forEach(card => {
+  card.addEventListener('click', () => {
+    demoCards.forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+    const demoKey = card.getAttribute('data-demo');
+    if (demoScenarios[demoKey]) {
+      activeDemoKey = demoKey;
+      messageInput.value = demoScenarios[demoKey];
+      updateCharCounter();
+    }
+  });
 });
 
-document.getElementById('sample-payment').addEventListener('click', () => {
-  messageInput.value = sampleMessages.payment;
-  messageInput.dispatchEvent(new Event('input'));
+// 4. "Try Example & Analyze" Button
+tryExampleBtn.addEventListener('click', () => {
+  const currentDemo = demoScenarios[activeDemoKey] || demoScenarios.contradiction;
+  messageInput.value = currentDemo;
+  updateCharCounter();
+  runAnalysis();
 });
 
-document.getElementById('sample-scholarship').addEventListener('click', () => {
-  messageInput.value = sampleMessages.scholarship;
-  messageInput.dispatchEvent(new Event('input'));
-});
-
-// 4. View State Controller (Empty / Loading / Error / Results)
+// 5. View State Controller (Empty / Loading / Error / Results)
 function showState(state) {
   emptyState.classList.add('hidden');
   loadingState.classList.add('hidden');
@@ -117,18 +146,24 @@ function showState(state) {
   }
 }
 
-// 5. Analyze Button Click Handler (Real Java Backend Connection)
-analyzeBtn.addEventListener('click', async () => {
+// 6. Primary Analyze Trigger
+analyzeBtn.addEventListener('click', () => {
+  runAnalysis();
+});
+
+// 7. Core Analysis Execution Function
+async function runAnalysis() {
   const text = messageInput.value.trim();
 
   if (!text) {
-    alert("Please paste or type a message first, or select one of the quick samples above!");
+    alert("Please paste a message or select one of the demo scenarios above!");
     messageInput.focus();
     return;
   }
 
   // Set button loading state
   analyzeBtn.disabled = true;
+  tryExampleBtn.disabled = true;
   const btnTextSpan = analyzeBtn.querySelector('.btn-text');
   const originalText = btnTextSpan ? btnTextSpan.textContent : 'Analyze Message';
   if (btnTextSpan) btnTextSpan.textContent = 'Analyzing...';
@@ -165,19 +200,20 @@ analyzeBtn.addEventListener('click', async () => {
     console.error('[ScamLens] Backend request failed:', err);
     displayFriendlyError(err);
   } finally {
-    // Restore button state
+    // Restore button states
     analyzeBtn.disabled = false;
+    tryExampleBtn.disabled = false;
     if (btnTextSpan) btnTextSpan.textContent = originalText;
   }
-});
+}
 
-// 6. Response Validation & Safe DOM Rendering
+// 8. Grounded Evidence Rendering & Safe DOM Updates
 function validateAndRenderAssessment(data) {
   if (!data || typeof data !== 'object') {
     throw new Error("Invalid response format received from server.");
   }
 
-  // Validate risk level against permitted CSS themes
+  // Validate risk level
   const allowedLevels = ['high', 'medium', 'low'];
   const level = (data.level && allowedLevels.includes(String(data.level).toLowerCase()))
     ? String(data.level).toLowerCase()
@@ -201,47 +237,132 @@ function validateAndRenderAssessment(data) {
     ? Math.max(0, Math.min(100, Math.round(data.score)))
     : null;
 
-  // Validate arrays
-  const phrases = Array.isArray(data.phrases) ? data.phrases : [];
-  const actions = Array.isArray(data.actions) ? data.actions : [];
-
-  // Safe DOM updates using textContent (preventing any XSS vulnerabilities)
+  // Safe DOM updates
   riskBadge.className = `risk-badge ${level}`;
   riskLabel.textContent = label;
   riskSummary.textContent = summary;
 
   if (riskScorePill) {
-    riskScorePill.textContent = score !== null ? `Risk Score: ${score} / 100` : 'Score: N/A';
+    riskScorePill.textContent = score !== null ? `Score: ${score} / 100` : 'Score: N/A';
   }
 
   if (enginePill) {
-    enginePill.textContent = (typeof data.engine === 'string' && data.engine.trim())
-      ? data.engine.trim()
-      : 'ScamLens';
+    const rawEngine = (typeof data.engine === 'string' && data.engine.trim()) ? data.engine.trim() : 'ScamLens';
+    enginePill.textContent = rawEngine;
+    if (rawEngine.toLowerCase().includes('gemma')) {
+      enginePill.className = 'engine-pill ai';
+    } else {
+      enginePill.className = 'engine-pill heuristic';
+    }
   }
 
-  // Populate suspicious phrases
-  clearChildren(suspiciousPhrasesList);
-  if (phrases.length === 0) {
-    const li = document.createElement('li');
-    li.textContent = 'No explicit high-risk keywords detected';
-    suspiciousPhrasesList.appendChild(li);
+  // 1. Contradictions Section
+  const contradictions = Array.isArray(data.contradictions) ? data.contradictions : [];
+  if (contradictions.length > 0) {
+    contradictionBlock.classList.remove('hidden');
+    contradictionText.textContent = contradictions.join(' ');
   } else {
-    phrases.forEach(phrase => {
-      const li = document.createElement('li');
-      li.textContent = String(phrase);
-      suspiciousPhrasesList.appendChild(li);
-    });
+    contradictionBlock.classList.add('hidden');
   }
 
-  // Populate explanation
+  // 2. Grounded Findings Section
+  const findings = Array.isArray(data.findings) ? data.findings : [];
+  clearChildren(findingsContainer);
+
+  let groundedCountNum = 0;
+
+  if (findings.length > 0) {
+    findings.forEach(finding => {
+      const card = document.createElement('div');
+      card.className = 'finding-card';
+
+      // Category Pill
+      const categoryRow = document.createElement('div');
+      categoryRow.className = 'finding-header';
+
+      const catBadge = document.createElement('span');
+      catBadge.className = 'finding-category-pill';
+      catBadge.textContent = finding.category || 'Observed Indicator';
+      categoryRow.appendChild(catBadge);
+
+      if (finding.isGrounded !== false && finding.quote) {
+        groundedCountNum++;
+        const groundedPill = document.createElement('span');
+        groundedPill.className = 'grounded-verified-badge';
+        groundedPill.textContent = '✓ Directly Observed in Message';
+        categoryRow.appendChild(groundedPill);
+      }
+
+      card.appendChild(categoryRow);
+
+      // Verbatim Quote Block
+      if (finding.quote && String(finding.quote).trim()) {
+        const quoteBox = document.createElement('blockquote');
+        quoteBox.className = 'finding-quote';
+        quoteBox.textContent = `"${String(finding.quote).trim()}"`;
+        card.appendChild(quoteBox);
+      }
+
+      // Plain-English Explanation
+      if (finding.explanation && String(finding.explanation).trim()) {
+        const expP = document.createElement('p');
+        expP.className = 'finding-explanation';
+        expP.innerHTML = `<strong>Why this matters:</strong> ${escapeHtml(finding.explanation)}`;
+        card.appendChild(expP);
+      }
+
+      // Actionable Safe Step
+      if (finding.action && String(finding.action).trim()) {
+        const actDiv = document.createElement('div');
+        actDiv.className = 'finding-action';
+        actDiv.innerHTML = `<strong>Actionable Step:</strong> ${escapeHtml(finding.action)}`;
+        card.appendChild(actDiv);
+      }
+
+      findingsContainer.appendChild(card);
+    });
+  } else {
+    // Fallback to phrases array if findings are not populated
+    const phrases = Array.isArray(data.phrases) ? data.phrases : [];
+    if (phrases.length > 0) {
+      phrases.forEach(phrase => {
+        const card = document.createElement('div');
+        card.className = 'finding-card simple';
+        const p = document.createElement('p');
+        p.textContent = String(phrase);
+        card.appendChild(p);
+        findingsContainer.appendChild(card);
+      });
+    } else {
+      const emptyFinding = document.createElement('div');
+      emptyFinding.className = 'finding-card empty';
+      emptyFinding.textContent = 'No explicit high-risk patterns or demands identified in submitted text.';
+      findingsContainer.appendChild(emptyFinding);
+    }
+  }
+
+  if (groundedCount) {
+    groundedCount.textContent = `${groundedCountNum} quote${groundedCountNum === 1 ? '' : 's'} grounded`;
+  }
+
+  // 3. Explanation Section
   explanationText.textContent = explanation;
 
-  // Populate recommended safe actions
+  // 4. Uncertainty & Limitations Section
+  if (data.uncertainty && String(data.uncertainty).trim()) {
+    uncertaintyBox.classList.remove('hidden');
+    uncertaintyText.textContent = String(data.uncertainty).trim();
+  } else {
+    uncertaintyBox.classList.remove('hidden');
+    uncertaintyText.textContent = "Analytical risk assessment based on textual patterns. Not legal proof or a calibrated mathematical probability.";
+  }
+
+  // 5. Actions Section
+  const actions = Array.isArray(data.actions) ? data.actions : [];
   clearChildren(actionList);
   if (actions.length === 0) {
     const li = document.createElement('li');
-    li.textContent = 'Always exercise caution when interacting with unverified senders.';
+    li.textContent = 'Always exercise caution and independently verify the sender through official directories.';
     actionList.appendChild(li);
   } else {
     actions.forEach(action => {
@@ -251,32 +372,41 @@ function validateAndRenderAssessment(data) {
     });
   }
 
-  // Switch to results view
+  // Reveal results
   showState('results');
+
+  // Smoothly scroll to results if on smaller screens
+  if (window.innerWidth <= 860) {
+    const resultsCard = document.getElementById('results-card');
+    if (resultsCard) {
+      resultsCard.scrollIntoView({ behavior: 'smooth' });
+    }
+  }
 }
 
-// 7. Friendly Error Handler
+// 9. Display Friendly Error State
 function displayFriendlyError(err) {
   showState('error');
-
-  const isNetworkFailure = err.name === 'TypeError' || (err.message && err.message.toLowerCase().includes('failed to fetch'));
-
-  if (isNetworkFailure) {
-    if (errorTitle) errorTitle.textContent = "Java Backend Offline";
-    if (errorMessage) {
-      errorMessage.textContent = "Could not reach http://localhost:8080. The Java backend server is not running or port 8080 is blocked.";
-    }
-  } else {
-    if (errorTitle) errorTitle.textContent = "Analysis Request Error";
-    if (errorMessage) {
-      errorMessage.textContent = err.message || "An unexpected error occurred while communicating with the server.";
-    }
+  if (errorMessage) {
+    errorMessage.textContent = err.message || "Could not connect to the ScamLens Java server.";
   }
 }
 
-// Helper: Safely remove all child nodes without unsafe innerHTML
-function clearChildren(parent) {
-  while (parent.firstChild) {
-    parent.removeChild(parent.firstChild);
+// Helper: Clear element children
+function clearChildren(elem) {
+  if (!elem) return;
+  while (elem.firstChild) {
+    elem.removeChild(elem.firstChild);
   }
+}
+
+// Helper: Safe HTML entity escaping
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }

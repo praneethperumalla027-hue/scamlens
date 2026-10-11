@@ -21,6 +21,9 @@ WORKDIR /app
 # Copy compiled classes from build stage
 COPY --from=builder /build/bin ./bin
 
+# Copy frontend static assets for full-stack deployment on Render
+COPY frontend/ ./frontend/
+
 # Render automatically injects the PORT environment variable; default to 8080 locally
 ENV PORT=8080
 

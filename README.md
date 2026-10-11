@@ -1,4 +1,4 @@
-# 🛡️ ScamLens
+# 🛡️ ScamLens — “Explain Before You Trust”
 
 <div align="center">
 
@@ -9,74 +9,96 @@
 ![Zero Dependencies](https://img.shields.io/badge/Dependencies-Zero-success?style=for-the-badge)
 ![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)
 
-**An intelligent, dual-engine scam detection platform designed to protect students, job seekers, and everyday users from fraudulent job postings, fake internship offers, and advance-fee scams.**
+**A grounded AI & deterministic heuristic security platform designed to inspect job, internship, scholarship, and payment messages, explain evidence, distinguish facts from uncertainty, and recommend safe verification steps.**
 
-[Live Demo](#-production-deployment) • [Key Features](#-key-features) • [Architecture](#-system-architecture) • [Quick Start](#-quick-start-local-development) • [API Reference](#-api-reference) • [Test Suite](#-automated-testing-suite)
+[Live Demo](#-production-deployment) • [Why Not a Wrapper?](#-more-than-a-basic-llm-wrapper) • [Architecture](#-system-architecture--data-flow) • [Threat Model](#-threat-model--scope) • [API Reference](#-api-reference) • [Test Suite](#-automated-testing-suite)
 
 </div>
 
 ---
 
-## 📌 Overview & Problem Statement
+## 📌 Philosophy: “Explain Before You Trust”
 
-College students and early-career professionals are increasingly targeted by sophisticated recruitment scams. Malicious actors masquerade as reputable tech firms or university programs, sending convincing invitation emails that later demand:
-- **"Refundable" onboarding or equipment security deposits** (often requested via UPI, wire transfer, or cryptocurrency).
-- **Extreme psychological pressure and artificial urgency** (*"Pay within 30 minutes to confirm your seat"*).
-- **Phishing links** leading to credential-harvesting portals.
+Most automated security tools either act as opaque black boxes that output a generic risk score without explanation, or blindly pipe messages into a cloud LLM with zero grounding or validation.
 
-**ScamLens** solves this by providing immediate, contextual threat analysis. It dissects incoming messages using a **hybrid intelligence model**: deep contextual reasoning powered by **Google Gemma AI**, backed by a resilient, deterministic **Rule Heuristics Engine** with zero external dependencies.
-
----
-
-## ✨ Key Features
-
-- 🧠 **Dual-Engine Hybrid Intelligence:**
-  - **Primary:** Google Gemma LLM (`gemma-4-26b-a4b-it`) for nuanced semantic risk evaluation and actionable safety advice.
-  - **Secondary:** High-speed, local deterministic Rule Heuristics engine providing instant fallback when API quotas are exceeded, connection times out, or when running offline.
-- 🎯 **Context-Aware Payment Negation:**
-  - Avoids false alarms on legitimate communications that state *"no application fee"*, *"never ask you to pay"*, or *"fees are 100% waived"*.
-  - Accurately detects deceptive messages that claim *"no application fee"* but subsequently slip in a *"refundable security deposit of ₹799"*.
-- ⏱️ **Temporal Urgency Dissection:**
-  - Distinguishes high-pressure coercive tactics (*"within 30 minutes"*, *"avoid losing your seat"*, *"act now"*) from benign recruitment deadlines (*"reply within 3 days"*, *"deadline next Friday"*).
-- 🔒 **Zero-Trust Security & Secrets Isolation:**
-  - Gemma API keys remain exclusively on the backend server; never exposed to browser clients, Git commits, or response bodies.
-  - Request authentication uses secure `x-goog-api-key` headers instead of leaky URL query parameters.
-  - Sanitized logging guarantees credentials and sensitive payloads are never printed.
-- ⚡ **Ultra-Lightweight & Zero-Bloat Backend:**
-  - Built with native Java Standard Edition (`com.sun.net.httpserver`, `java.net.http`).
-  - No Spring, no third-party JARs, and no framework overhead. Sub-100ms cold starts with minimal memory footprint.
-- 🌐 **Production-Ready & Configurable:**
-  - Environment-driven `PORT` configuration for seamless cloud hosting (Render, Railway, Fly.io).
-  - Safe, origin-aware CORS protection (`ALLOWED_ORIGINS` whitelist) with local development compatibility.
-  - Fully Dockerized multi-stage container build.
+**ScamLens** was engineered around a core principle: **Explain Before You Trust**. It decomposes incoming messages into:
+1. **Directly Observed Text:** Verifiable, verbatim quotes from the submitted message.
+2. **Analytical Inferences:** Grounded explanations of why specific patterns represent social engineering or advance-fee tactics.
+3. **Deceptive Contradictions:** Explicit detection of conflicting statements (e.g., claiming *"no application fee"* while demanding a *"refundable security deposit"*).
+4. **Analytical Uncertainty:** Honest, calibrated disclosures regarding false-positive risks and textual limitations.
+5. **Actionable Defense:** Step-by-step verification guidelines that don't depend on trusting the sender.
 
 ---
 
-## 🏗️ System Architecture
+## 💡 What Makes ScamLens More Than a Basic LLM Wrapper?
+
+Many hackathon AI projects are simple API wrappers that send user text to an LLM and pass the string back to the client. ScamLens introduces a production-grade security architecture:
+
+| Challenge | Basic LLM Wrapper | ScamLens Security Architecture |
+| :--- | :--- | :--- |
+| **Model Hallucination** | Blindly accepts invented facts or fake quotes generated by the LLM. | **Server-Side Quote Grounding:** The Java backend cross-checks every quote returned by the model against the original input. Fabricated quotes are rejected and never presented to the user. |
+| **Quota Exhaustion & Outages** | Fails completely with HTTP 429 / 500 when API limits are reached. | **Deterministic Rule Fallback:** Automatically switches to a local Java heuristic analyzer that executes in < 5ms with zero network calls. |
+| **Deceptive Contradictions** | Can be misled by prompts stating *"No fee required"* and lower the score. | **Contradiction-Aware Engine:** Explicitly recognizes when an initial fee denial is followed by a hidden deposit demand and flags the contradiction. |
+| **False Alarms on Deadlines** | Flags legitimate deadlines (*"by Friday"*, *"within 3 days"*) as scam urgency. | **Temporal Urgency Dissection:** Distinguishes coercive short countdowns (*"within 30 minutes"*, *"avoid losing your seat"*) from standard interview timelines. |
+| **Dependency Bloat & Vulnerabilities** | Pulls in heavy frameworks (Spring, LangChain, large node packages). | **Zero External Dependencies:** Built with pure Java SE (`com.sun.net.httpserver`, `java.net.http`). Fast cold start (< 100ms) and minimal attack surface. |
+| **Transparency & Truth in Labeling** | Labels all output as "AI-Powered", even during static fallback. | **Honest Engine Attribution:** Accurately labels output as `Gemma AI (model)` or `Rule Heuristics`. Never claims fallback used AI. |
+
+---
+
+## 🏗️ System Architecture & Data Flow
 
 ```mermaid
-flowchart TD
-    Client["💻 Client / Browser\n(frontend/index.html)"]
-    Server["☕ Java HTTP Server\n(backend/Server.java)"]
-    Gemma["🧠 Google Gemma API\n(gemma-4-26b-a4b-it)"]
-    Rules["🛡️ Rule Heuristics Engine\n(Deterministic RegEx & Context)"]
+sequenceDiagram
+    autonumber
+    actor User as User / Browser
+    participant Server as Java HTTP Server (Server.java)
+    participant Validator as Evidence Validator
+    participant Gemma as Google Gemma API (gemma-4-26b-a4b-it)
+    participant Rules as Rule Heuristics Engine
 
-    Client -->|"POST /api/analyze\n{ message: '...' }"| Server
+    User->>Server: POST /api/analyze { message }
     
-    Server -->|"1. Check DISABLE_AI & Key"| Check{AI Enabled?}
-    Check -->|"Yes"| Gemma
-    Check -->|"No / Key Missing"| Rules
-    
-    Gemma -->|"Success (HTTP 200)"| ResultAI["✅ engine: Gemma AI\nRisk Score + Breakdown"]
-    Gemma -.->|"Quota Exceeded / Timeout"| Fallback["⚠️ Automatic Fallback"]
-    Fallback --> Rules
-    
-    Rules -->|"Instant Local Evaluation (<5ms)"| ResultRules["✅ engine: Rule Heuristics\nRisk Score + Breakdown"]
-    
-    ResultAI --> Server
-    ResultRules --> Server
-    Server -->|"JSON Response\n{ level, score, phrases, actions, engine }"| Client
+    alt AI Enabled & Key Present (DISABLE_AI != true)
+        Server->>Gemma: POST generateContent (x-goog-api-key)
+        alt Gemma Returns Valid Output
+            Gemma-->>Server: JSON candidate
+            Server->>Validator: parseAndValidateGemmaResponse(json, message)
+            alt Quotes Grounded & Fields Valid
+                Validator-->>Server: Validated AnalysisResult (engine: Gemma AI)
+            else Fabricated Quotes / Invalid Output
+                Validator-->>Server: Throw ModelValidationException
+                Server->>Rules: analyzeMessage(message) [Safe Fallback]
+                Rules-->>Server: Grounded AnalysisResult (engine: Rule Heuristics)
+            end
+        else Quota Exceeded (429) / Timeout
+            Server->>Rules: analyzeMessage(message) [Automatic Fallback]
+            Rules-->>Server: Grounded AnalysisResult (engine: Rule Heuristics)
+        end
+    else AI Disabled or Offline
+        Server->>Rules: analyzeMessage(message) [Direct Heuristics]
+        Rules-->>Server: Grounded AnalysisResult (engine: Rule Heuristics)
+    end
+
+    Server-->>User: JSON Response { level, score, findings, contradictions, uncertainty, actions }
 ```
+
+---
+
+## 🎯 Threat Model & Scope
+
+ScamLens is engineered specifically to address common threat vectors targeting students and job applicants:
+
+### In-Scope Threat Indicators:
+- **Advance-Fee Recruitment Fraud:** Demanding upfront deposits, onboarding insurance, laptop reservations, or background check fees under the guise of "refundable" deposits.
+- **Deceptive Fee Contradictions:** Claiming an opportunity is "100% free" in one sentence before introducing mandatory payments later in the communication.
+- **Coercive Urgency & Ultimatums:** Extreme artificial deadlines designed to prevent victim verification (*"within 30 minutes"*, *"avoid losing your slot"*).
+- **Phishing & Credential Theft:** Suspicious top-level domains (`.xyz`, `.top`), IP-based URLs, and redirection links designed to steal university credentials or banking details.
+- **Unrealistic Compensation / No-Interview Selection:** Offering extraordinary compensation ($45/hr data entry) or hiring without an interview process.
+
+### Explicit Limitations & Out-of-Scope:
+- **Textual Evidence Only:** ScamLens evaluates message text. It does not perform live domain WHOIS queries or external business registry checks.
+- **Offline / Out-of-Band Verification:** It cannot verify caller IDs, spoofed phone numbers, or offline business licenses.
+- **Risk Assessment, Not Absolute Proof:** Results represent heuristic and semantic threat assessments, not definitive proof of criminality or calibrated mathematical probabilities.
 
 ---
 
@@ -85,31 +107,30 @@ flowchart TD
 ```text
 scamlens/
 ├── backend/
-│   ├── Server.java            # Native Java HTTP REST Server & Heuristics Engine
-│   └── ServerTest.java        # Comprehensive automated test suite (6 test cases)
+│   ├── Server.java            # Native Java HTTP Server, Gemma Client, Validator & Heuristics
+│   └── ServerTest.java        # Standalone test suite (12 technical test cases)
 ├── frontend/
-│   ├── index.html             # Responsive UI with score gauge & findings breakdown
-│   ├── style.css              # Custom design system (dark mode, glassmorphism)
-│   └── app.js                 # Frontend state, API client, & dynamic origin resolution
-├── .dockerignore              # Excludes secrets, git history, and build artifacts
+│   ├── index.html             # Judge-ready interface with demo selector & findings cards
+│   ├── style.css              # Custom responsive design system (Plus Jakarta Sans, Mono)
+│   └── app.js                 # Frontend client, evidence renderer, & dynamic URL resolver
+├── .dockerignore              # Prevents secrets, Git history, and class files in container
 ├── .gitignore                 # Enforces zero secret commits (.env, *.class)
-├── Dockerfile                 # Multi-stage container build for Render deployment
-└── README.md                  # Complete platform documentation
+├── Dockerfile                 # Multi-stage Eclipse Temurin Java container for Render
+├── LICENSE                    # MIT License
+└── README.md                  # System documentation
 ```
 
 ---
 
 ## ⚙️ Configuration & Environment Variables
 
-Configure these variables in your environment or hosting dashboard:
-
-| Variable | Default | Required | Description |
-| :--- | :--- | :---: | :--- |
-| `PORT` | `8080` | No | Server port. Automatically supplied by Render in production. |
-| `GEMMA_API_KEY` | *(None)* | No | Google AI Studio API key. Kept exclusively on backend. If omitted, server runs in Rule Heuristics mode. |
-| `GEMMA_MODEL` | `gemma-4-26b-a4b-it` | No | Model identifier used for Google AI calls. |
-| `ALLOWED_ORIGINS` | *(Local only)* | No | Comma-separated whitelist of allowed CORS origins (e.g., `https://praneethperumalla027-hue.github.io`). |
-| `DISABLE_AI` | `false` | No | When set to `true`, disables external AI calls and forces deterministic Rule Heuristics mode (ideal for local testing). |
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `PORT` | `8080` | Port for the Java HTTP server to listen on (Render supplies this automatically). |
+| `GEMMA_API_KEY` | *(None)* | Google AI Studio API key. Kept exclusively on backend. Never required for local rule analysis. |
+| `GEMMA_MODEL` | `gemma-4-26b-a4b-it` | Target Google Gemma model identifier. |
+| `ALLOWED_ORIGINS` | *(Local dev)* | Comma-separated CORS whitelist (e.g., `https://praneethperumalla027-hue.github.io`). |
+| `DISABLE_AI` | `false` | When set to `true`, forces instant local Rule Heuristics mode (useful when offline or quota is exhausted). |
 
 ---
 
@@ -117,49 +138,34 @@ Configure these variables in your environment or hosting dashboard:
 
 ### Prerequisites
 - **Java SE Development Kit (JDK 17 or higher)**
-- **Modern Web Browser** (Chrome, Edge, Firefox, Safari)
+- **Modern Web Browser** (Chrome, Firefox, Edge, Safari)
 
-### 1. Clone the Repository
+### 1. Compile Backend
 ```bash
-git clone https://github.com/praneethperumalla027-hue/scamlens.git
-cd scamlens
-```
-
-### 2. Configure Environment (Optional)
-To use Gemma AI, create a `.env` file in the project root (this file is automatically ignored by `.gitignore`):
-```env
-GEMMA_API_KEY=your_google_ai_studio_api_key_here
-```
-> *Tip: If you do not have an API key, ScamLens runs seamlessly out-of-the-box using the local Rule Heuristics engine.*
-
-### 3. Compile and Start the Backend
-```bash
-# Compile
 javac -encoding UTF-8 -cp backend backend/Server.java
+```
 
-# Run
+### 2. Start the Backend Server
+```bash
 java -cp backend Server
 ```
 *The server will start at `http://localhost:8080`.*
 
-### 4. Open the Frontend
-Simply open `frontend/index.html` in your browser:
+### 3. Open the Frontend
+Open `frontend/index.html` in your browser:
 ```bash
 # Windows
 start frontend/index.html
 
 # macOS
 open frontend/index.html
-
-# Linux
-xdg-open frontend/index.html
 ```
 
 ---
 
 ## 🧪 Automated Testing Suite
 
-ScamLens includes a comprehensive, standalone test suite (`backend/ServerTest.java`) that verifies accuracy, payment negation handling, and urgency detection without calling external APIs.
+ScamLens includes a comprehensive, standalone test suite (`backend/ServerTest.java`) that verifies accuracy, server-side evidence validation, hallucination rejection, and contradiction handling **without making paid or external network calls**.
 
 ### Run the Tests
 ```bash
@@ -167,22 +173,37 @@ javac -encoding UTF-8 -cp backend backend/Server.java backend/ServerTest.java
 java -cp backend ServerTest
 ```
 
-### Test Coverage Summary:
-| # | Scenario | Input Characteristics | Expected Level | Expected Outcome |
-| :-: | :--- | :--- | :-: | :--- |
-| **1** | **Legitimate Internship** | *"There is no application or registration fee"* | **Low** (< 35) | Zero false alarms; no payment flags. |
-| **2** | **Explicit Registration Scam** | *"Pay refundable fee of $30 via UPI within 2h"* | **High** (≥ 60) | Flags upfront payment and urgency pressure. |
-| **3** | **Phishing with No-Fee Clause** | *"No fee... click link immediately to verify"* | **Medium** | Flags suspicious URL and urgency; does **not** falsely flag payment. |
-| **4** | **Deceptive Mixed Scam** | *"No application fee... pay deposit of ₹799 in 30m"* | **High** (≥ 60) | Flags **both** upfront deposit and 30-min coercive urgency. |
-| **5** | **Benign Scheduling Window** | *"Select interview slot within 3 days"* | **Low** (≤ 15) | Ordinary 3-day scheduling window is **not** flagged as urgency. |
-| **6** | **Fee Waiver Exemption** | *"Registration fee has been 100% waived"* | **Low** (≤ 10) | Fee waiver accurately recognized; zero false positives. |
+### Technical Test Coverage (21 / 21 Tests):
+| # | Test Scenario | Verified Behavior |
+| :-: | :--- | :--- |
+| **1** | **Legitimate Internship (No Fee)** | Verified classified as **Low Risk** (< 35/100) with 0 false alarms. |
+| **2** | **Explicit Registration Scam** | Verified classified as **High Risk** (≥ 60/100) and detects upfront payment. |
+| **3** | **No-Fee Clause with Phishing Link** | Flags urgency and suspicious URL; does **not** falsely flag payment demand. |
+| **4** | **Mixed Fee Negation + Urgent Deposit** | Detects deceptive contradiction, flags deposit quote, and catches 30-min urgency. |
+| **5** | **Benign Scheduling Window** | Standard 3-day interview window is **not** misclassified as scam urgency. |
+| **6** | **Fee Waiver Exemption** | 100% fee waiver is recognized; zero false alarms for payment or urgency. |
+| **7** | **Authentic Quote Validation** | Server verifies and grounds quotes that exist verbatim in the submitted message text. |
+| **8** | **Fabricated Quote Rejection** | Server catches and rejects hallucinated quotes not present in the user message. |
+| **9** | **Strict Risk Level Enforcement** | Rejects uncalibrated/invalid risk levels (`"catastrophic"`, `""`) via `ModelValidationException`. |
+| **10** | **Malformed AI Output Handling** | Corrupted or non-JSON model output triggers safe, deterministic heuristic fallback. |
+| **11** | **Structured Findings & Contradictions** | Validates structured `findings` array, `contradictions` list, and `uncertainty` notes. |
+| **12** | **Suspicious Phishing Domains** | Identifies `.xyz`, shortened links, and raw IP address link formats. |
+| **13** | **Multi-Part Gemma Reasoning Extraction** | Separates `thought: true` reasoning parts from the final JSON answer. |
+| **14** | **Markdown Code Fence Stripping** | Strips ```` ```json ```` fences and extracts clean JSON object. |
+| **15** | **Harmless Commentary Bypass** | Extracts valid JSON object embedded within natural language commentary. |
+| **16** | **Unbalanced Curly Braces Rejection** | Rejects malformed JSON containing unbalanced brackets via `ModelValidationException`. |
+| **17** | **Ambiguous Multiple Root Objects** | Rejects ambiguous outputs containing conflicting root JSON blocks. |
+| **18** | **Out-of-Range Risk Score Enforcement** | Strictly enforces that `score` must be an integer between 0 and 100. |
+| **19** | **Missing Required Field Rejection** | Rejects model output missing required schema fields (`explanation`, `summary`, etc.). |
+| **20** | **Array Parsing with Embedded Brackets** | Robust quote-aware parsing of string arrays containing brackets (`[url]`, `[30 min]`). |
+| **21** | **AI Network Failure & Rule Fallback** | Verifies deterministic fallback to `Rule Heuristics` upon simulated AI failure. |
 
 ---
 
 ## 📡 API Reference
 
-### 1. Health Check
-`GET /api/health`
+### `GET /api/health`
+Checks server status and configuration.
 
 **Response (`200 OK`):**
 ```json
@@ -197,34 +218,62 @@ java -cp backend ServerTest
 
 ---
 
-### 2. Analyze Message
-`POST /api/analyze`
+### `POST /api/analyze`
+Submits a message for grounded evidence analysis.
 
-**Request Body (`application/json`):**
+**Request (`application/json`):**
 ```json
 {
-  "message": "Congratulations! There is no application fee. However, you must pay a refundable security deposit of ₹799 within 30 minutes to secure your seat."
+  "message": "Congratulations! There is no application fee for this role. However, you must pay a refundable security deposit of ₹799 within 30 minutes to secure your seat."
 }
 ```
 
-**Response Body (`200 OK`):**
+**Response (`200 OK`):**
 ```json
 {
   "level": "high",
-  "label": "High Risk — Probable Scam",
-  "summary": "Critical scam indicators detected. Immediate caution advised.",
-  "explanation": "Warning signs identified: Requests upfront money, deposit, or fees (often disguised as refundable onboarding charges), which is characteristic of advance-fee scams. Uses high urgency or pressure tactics to rush your decision before you have time to verify.",
+  "label": "High Risk",
+  "summary": "Multiple severe scam indicators detected in this message.",
+  "explanation": "Warning signs identified: Deceptively claims no application fee while simultaneously demanding an upfront deposit or fee. Requests upfront money, deposit, or fees...",
+  "engine": "Rule Heuristics",
+  "score": 95,
   "phrases": [
+    "Contradictory fee statement (Fee denial combined with payment demand)",
     "Request for upfront payment, deposit, or fee",
     "High urgency / psychological pressure"
   ],
   "actions": [
-    "Do not send money, gift cards, or cryptocurrency under any circumstances.",
-    "Verify the opportunity directly on the organization's official careers portal.",
-    "Never share one-time passwords (OTPs), bank account PINs, or sensitive documents."
+    "Do NOT send money, UPI transfers, cryptocurrency, or gift cards under any circumstances.",
+    "Do not rush. Legitimate employers allow reasonable time to evaluate opportunities.",
+    "Verify the opportunity directly on the organization's official careers portal."
   ],
-  "score": 80,
-  "engine": "Rule Heuristics"
+  "findings": [
+    {
+      "category": "Contradictory Fee Statements",
+      "quote": "There is no application fee for this role ... However, you must pay a refundable security deposit of ₹799 within 30 minutes to secure your seat",
+      "explanation": "The message states that no application fee is required, yet subsequently requests a deposit or payment. Scammers frequently use initial 'no fee' assurances to lower guard before introducing mandatory fees.",
+      "action": "Disregard initial assurances of 'no fee' when payment is requested elsewhere. Legitimate employers never require onboarding or security deposits.",
+      "isGrounded": true
+    },
+    {
+      "category": "Upfront Payment / Deposit Demand",
+      "quote": "However, you must pay a refundable security deposit of ₹799 within 30 minutes to secure your seat",
+      "explanation": "Requests upfront money, deposit, or fees (often disguised as refundable onboarding charges), which is characteristic of advance-fee scams.",
+      "action": "Do NOT send money, UPI transfers, cryptocurrency, or gift cards under any circumstances.",
+      "isGrounded": true
+    },
+    {
+      "category": "High Urgency / Pressure Tactics",
+      "quote": "within 30 minutes",
+      "explanation": "Uses artificial time pressure or ultimatums to rush your decision before you have time to independently verify the opportunity.",
+      "action": "Do not rush. Take time to verify the sender through independent channels.",
+      "isGrounded": true
+    }
+  ],
+  "contradictions": [
+    "Message contains conflicting statements: denies fees ('There is no application fee for this role') but subsequently demands payment ('However, you must pay a refundable security deposit of ₹799 within 30 minutes to secure your seat')."
+  ],
+  "uncertainty": "High-confidence risk indicators identified. While automated text analysis cannot establish legal proof of fraud, the detected combination of demands strongly aligns with known advance-fee and phishing scam patterns."
 }
 ```
 
@@ -234,36 +283,23 @@ java -cp backend ServerTest
 
 ### Backend on [Render](https://render.com/) (Docker Web Service)
 
-1. Create a new **Web Service** on Render and connect your GitHub repository `praneethperumalla027-hue/scamlens`.
-2. Choose **Docker** as the environment. Render automatically detects the root `Dockerfile`.
-3. Under **Environment Variables**, configure:
-   - `GEMMA_API_KEY`: *(Optional)* Your Google AI API key.
-   - `ALLOWED_ORIGINS`: Your frontend domain (e.g., `https://praneethperumalla027-hue.github.io`).
-   - *(Render automatically assigns and binds `PORT`)*.
-4. Click **Deploy**. Your API will be live at `https://<service-name>.onrender.com`.
+1. Create a new **Web Service** on Render and select your GitHub repository.
+2. Select **Docker** as the environment (uses the root `Dockerfile`).
+3. Set environment variables in the Render dashboard:
+   - `GEMMA_API_KEY`: Your Google AI Studio API key.
+   - `ALLOWED_ORIGINS`: Your frontend domain (e.g. `https://praneethperumalla027-hue.github.io`).
+4. Render automatically manages builds, TLS certificates, and port binding.
 
 ### Frontend on GitHub Pages
 
-1. Navigate to your repository settings on GitHub: **Settings > Pages**.
-2. Select `master` branch and set the folder to `/frontend`.
-3. To connect the frontend to your deployed Render backend, either:
-   - Set the backend URL in browser `localStorage`:
-     ```javascript
-     localStorage.setItem('scamlens_api_url', 'https://your-backend.onrender.com');
-     ```
-   - Or configure `window.SCAMLENS_API_URL = "https://your-backend.onrender.com"` in `frontend/app.js`.
-
----
-
-## 🔐 Security & Privacy Posture
-
-- **No Secret Leakage:** Backend logs automatically redact sensitive credentials. The API key is stored only in environment variables and never exposed to clients.
-- **Header-Based Authentication:** Outgoing AI requests transmit keys via standard `x-goog-api-key` headers rather than query strings.
-- **CORS Restriction:** Strict origin matching prevents unauthorized third-party domains from leveraging your analysis endpoints in production.
-- **Data Privacy:** User messages analyzed locally via Rule Heuristics never leave the server.
+1. Navigate to repository **Settings > Pages**.
+2. Select `master` branch and directory `/frontend`.
+3. To configure the backend URL:
+   - Set in browser storage: `localStorage.setItem('scamlens_api_url', 'https://your-service.onrender.com');`
+   - Or set `window.SCAMLENS_API_URL = "https://your-service.onrender.com"` in `frontend/app.js`.
 
 ---
 
 ## 📄 License
 
-This project is licensed under the [MIT License](LICENSE). Contributions and improvements are welcome!
+This project is licensed under the [MIT License](LICENSE).
